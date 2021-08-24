@@ -11,6 +11,23 @@ from utils import load_fasta, get_logger
 LOGGER = get_logger()
 
 
+def revcomp(seq):
+    """
+    Convert sequence to reverse complementary
+    """
+    trantab = str.maketrans("ATCG", "TAGC")
+    return seq.translate(trantab)[::-1]
+
+
+def align_sequence(aligner, query):
+    for_aln = aligner.align(query)
+    rev_aln = aligner.align(revcomp(query))
+    if for_aln.score > rev_aln.score:
+        return for_aln
+    else:
+        return rev_aln
+
+
 def load_adapters(adapter_fa):
     """
     Load RCA splint and 10x adapters
@@ -66,10 +83,11 @@ def trim_adapters(ccs_fa, splint, primer3, primer5, threads):
 
 def trim_chunk(chunk, splint, primer3, primer5):
     import ssw
-    aligner = ssw.Aligner()
-
     summary, res = [], []
     for read_id, segments, seq_len, seq in chunk:
+        # if read_id != '60303d12-23f5-4643-b088-44acb1a59b2d':
+        #     continue
+
         tmp_summary = {
             'read_id': read_id,
             'segments': segments,
@@ -77,8 +95,11 @@ def trim_chunk(chunk, splint, primer3, primer5):
         }
 
         # Detect splint
-        splint_aln = aligner.align(reference=seq*2, query=splint)
-        rst, ren = splint_aln.reference_begin, splint_aln.reference_end
+        splint_alinger = ssw.Aligner(seq*2, match=2, mismatch=4, gap_open=4, gap_extend=2)
+        splint_aln = align_sequence(splint_alinger, splint)
+        # print(repr(splint_aln))
+        
+        rst, ren = splint_aln.ref_begin, splint_aln.ref_end
         if ren <= seq_len:
             ordered = seq[ren:] + seq[:rst]
             tmp_summary['splint_pos'] = '{}:{}'.format(rst, ren)
@@ -93,7 +114,8 @@ def trim_chunk(chunk, splint, primer3, primer5):
             tmp_summary['splint_type'] = 'junction'
     
         # Filter by qc tag
-        if splint_aln.query_coverage < 0.75:
+        splint_cov = (splint_aln.query_end - splint_aln.query_begin) / len(splint)
+        if splint_cov < 0.75:
             tmp_summary['qc_tag'] = 'no_splint'
             summary.append(tmp_summary)
             continue
@@ -106,20 +128,23 @@ def trim_chunk(chunk, splint, primer3, primer5):
         tmp_summary['fragment_len'] = len(ordered)
 
         # Trimmed adapters
-        aln3 = aligner.align(reference=ordered, query=primer3)
-        aln5 = aligner.align(reference=ordered, query=primer5)
-        tmp_summary['primer3'] = '{}:{}'.format(aln3.reference_begin, aln3.reference_end)
-        tmp_summary['primer5'] = '{}:{}'.format(aln5.reference_begin, aln5.reference_end)
+        ordered_aligner = ssw.Aligner(ordered, match=1, mismatch=1, gap_open=1, gap_extend=1,)
+        aln3 = align_sequence(ordered_aligner, primer3)
+        aln5 = align_sequence(ordered_aligner, primer5)
+        tmp_summary['primer3'] = '{}:{}'.format(aln3.ref_begin, aln3.ref_end)
+        tmp_summary['primer5'] = '{}:{}'.format(aln5.ref_begin, aln5.ref_end)
 
-        if aln3.query_coverage < 0.75 and aln5.query_coverage < 0.75:
+        aln3_cov = (aln3.query_end - aln3.query_begin) / len(primer3)
+        aln5_cov = (aln5.query_end - aln5.query_begin) / len(primer5)
+        if aln3_cov < 0.6 and aln5_cov < 0.6:
             tmp_summary['qc_tag'] = 'no_both_adapters'
             summary.append(tmp_summary)
             continue
-        elif aln3.query_coverage < 0.75:
+        elif aln3_cov < 0.6:
             tmp_summary['qc_tag'] = 'no_3prime_adapter'
             summary.append(tmp_summary)
             continue
-        elif aln5.query_coverage < 0.75:
+        elif aln5_cov < 0.6:
             tmp_summary['qc_tag'] = 'no_5prime_adapter'
             summary.append(tmp_summary)
             continue
@@ -127,7 +152,7 @@ def trim_chunk(chunk, splint, primer3, primer5):
             pass
 
         # Generate consensus reads
-        adapters = sorted([[aln3.reference_begin, aln3.reference_end], [aln5.reference_begin, aln5.reference_end]])
+        adapters = sorted([[aln3.ref_begin, aln3.ref_end], [aln5.ref_begin, aln5.ref_end]])
         trimmed = ordered[adapters[0][1]:adapters[1][0]]
         if len(trimmed) < 50:
             tmp_summary['qc_tag'] = 'clean_smaller_than_50'
