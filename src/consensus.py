@@ -2,6 +2,7 @@
 import os
 import sys
 import click
+import numpy as np
 from pathlib import Path 
 from multiprocessing import Pool, Lock
 from collections import namedtuple
@@ -9,6 +10,7 @@ Adapter = namedtuple('Adapter', ['seq', 'aligner'])
 LOCK = Lock()
 
 import ssw
+from spoa import poa
 from pyccs import find_consensus
 
 from logger import get_logger, ProgressBar
@@ -52,7 +54,7 @@ def _ret_callback(ret):
         # Prog.update(100 * Processed / Total, is_force=True)
 
 
-def trim_adapters(input_fa, splint, primer3, primer5, threads):
+def split_and_clean(input_fa, splint, primer3, primer5, threads):
     """
     1. Re-order consensus sequence using RCA_splint
     2. Trim 10x 5'- and 3'- adapters
@@ -67,7 +69,7 @@ def trim_adapters(input_fa, splint, primer3, primer5, threads):
     for record in yield_fastx(input_fa):
         chunk.append(record)
         if len(chunk) >= chunk_size:
-            jobs.append(pool.apply_async(trim_chunk, (chunk, splint, primer3, primer5, ),
+            jobs.append(pool.apply_async(worker, (chunk, splint, primer3, primer5,),
                                          callback=_ret_callback, error_callback=_err_callback, ))
             chunk = []
             break
@@ -89,26 +91,50 @@ def trim_adapters(input_fa, splint, primer3, primer5, threads):
     return res, summary 
 
 
-def trim_chunk(chunk, splint, primer3, primer5):
+def worker(chunk, splint, primer3, primer5):
     _splint = Adapter(splint, ssw.Aligner(splint, match=2, mismatch=4, gap_open=4, gap_extend=2))
     _primer3 = Adapter(primer3, ssw.Aligner(primer3, match=2, mismatch=4, gap_open=4, gap_extend=2))
     _primer5 = Adapter(primer5, ssw.Aligner(primer5, match=2, mismatch=4, gap_open=4, gap_extend=2))
 
     for read_id, seq, sep, qual in chunk:
+        segment_str, ccs_seq = split_by_splint(seq, _splint, _primer3, _primer5)
+        if ccs_seq is None:
+            pass
+
         segment_str, ccs_seq = find_consensus(seq)
         if ccs_seq is None:
-            continue
-
-        split_by_splint(seq, _splint, _primer3, _primer5)
+            pass
 
 
 
-def split_by_splint(seq, splint, primer3, primer5):
+def split_by_splint(seq, splint, primer3, primer5, p_indel=0.1):
     for_aln = splint.aligner.align(seq)
     rev_aln = splint.aligner.align(revcomp(seq))
     strand_seq = revcomp(seq) if for_aln.score < rev_aln.score else seq
     splint_hits = recursive_aln_splint(strand_seq, splint, 0, True, True)
-    print(splint_hits)
+    if len(splint_hits) == 0:
+        return None, None
+
+    segments = []
+    segment_str = []
+    segments.append(strand_seq[:splint_hits[0][0]])
+    segment_str.append(f"0:{splint_hits[0][0]}")
+    if len(splint_hits) > 1:
+        for l_hit, r_hit in zip(splint_hits[:-1], splint_hits[1:]):
+            segments.append(strand_seq[l_hit[1]:r_hit[0]])
+            segment_str.append(f"{l_hit[1]}:{r_hit[0]}")
+    segments.append(strand_seq[splint_hits[-1][1]:])
+    segment_str.append(f"{splint_hits[-1][1]}")
+
+    if len(segments) > 3:
+        d_estimate = np.array([len(i) for i in segments][1:-1])
+        d_mean = np.mean(d_estimate)
+        d_delta = np.sqrt(2.3 * (p_indel * (d_mean)))
+        if np.abs(d_estimate-d_mean).max() > d_delta:
+            return segment_str, None
+
+    ccs, msa = poa(sorted(segments, key=lambda x: len(x), reverse=True))
+    return segment_str, ccs
 
 
 def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=True):
@@ -151,6 +177,40 @@ def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=Tr
 
     # No hit
     return []
+
+
+def rearrange_by_splint(strand_seq, splint):
+    tmp_summary = {}
+    seq_len = len(strand_seq)
+    pseudo_aligner = ssw.Aligner(strand_seq*2, match=2, mismatch=4, gap_open=4, gap_extend=2)
+    splint_aln = align_sequence(pseudo_aligner, splint, strandness=False)
+
+    rst, ren = splint_aln.ref_begin, splint_aln.ref_end
+    if ren <= seq_len:
+        ordered = strand_seq[ren:] + strand_seq[:rst]
+        tmp_summary['splint_pos'] = '{}:{}'.format(rst, ren)
+        tmp_summary['splint_type'] = 'middle'
+    elif rst >= seq_len:
+        ordered = strand_seq[ren-seq_len:] + strand_seq[:rst-seq_len]
+        tmp_summary['splint_pos'] = '{}:{}'.format(rst-seq_len, ren-seq_len)
+        tmp_summary['splint_type'] = 'middle'
+    else:
+        ordered = strand_seq[ren-seq_len:rst]
+        tmp_summary['splint_pos'] = '{}:|:{}'.format(ren-seq_len, rst)
+        tmp_summary['splint_type'] = 'junction'
+
+    # Filter by qc tag
+    splint_cov = (splint_aln.query_end - splint_aln.query_begin) / len(splint)
+    if splint_cov < 0.75:
+        tmp_summary['qc_tag'] = 'no_splint'
+        return None, tmp_summary
+
+    if len(ordered) < 50:
+        tmp_summary['qc_tag'] = 'fragment_smaller_than_50'
+        return None, tmp_summary
+
+    tmp_summary['fragment_len'] = len(ordered)
+    return ordered, tmp_summary
 
 
 # def trim_ccs(chunk, splint, primer3, primer5):
@@ -237,24 +297,24 @@ def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=Tr
 #     return res, summary
 
 
-def write_consensus(out_file, cleaned_reads, summary_file, reads_summary):
-    from collections import Counter
-    with open(out_file, 'w') as out:
-        for read_id, trimmed in cleaned_reads:
-            out.write('>{}\n{}\n'.format(read_id, trimmed))
-    
-    failed_reasons = []
-    summary_cols = [
-        'read_id', 'segments', 'seq_len', 'splint_pos', 'splint_type',
-        'fragment_len', 'primer3', 'primer5', 'clean_len', 'qc_tag',
-    ]
-    with open(summary_file, 'w') as out:
-        out.write('\t'.join(summary_cols) + '\n')
-        for tmp_summary in reads_summary:
-            tmp_line = [tmp_summary[i] if i in tmp_summary else 'NA' for i in summary_cols]
-            out.write('\t'.join([str(x) for x in tmp_line]) + '\n')
-            failed_reasons.append(tmp_summary['qc_tag'])
-    return dict(Counter(failed_reasons))
+# def write_consensus(out_file, cleaned_reads, summary_file, reads_summary):
+#     from collections import Counter
+#     with open(out_file, 'w') as out:
+#         for read_id, trimmed in cleaned_reads:
+#             out.write('>{}\n{}\n'.format(read_id, trimmed))
+#
+#     failed_reasons = []
+#     summary_cols = [
+#         'read_id', 'segments', 'seq_len', 'splint_pos', 'splint_type',
+#         'fragment_len', 'primer3', 'primer5', 'clean_len', 'qc_tag',
+#     ]
+#     with open(summary_file, 'w') as out:
+#         out.write('\t'.join(summary_cols) + '\n')
+#         for tmp_summary in reads_summary:
+#             tmp_line = [tmp_summary[i] if i in tmp_summary else 'NA' for i in summary_cols]
+#             out.write('\t'.join([str(x) for x in tmp_line]) + '\n')
+#             failed_reasons.append(tmp_summary['qc_tag'])
+#     return dict(Counter(failed_reasons))
 
 
 @click.command()
@@ -277,7 +337,7 @@ def main(adapter, input, ccs, non, summary, threads):
     splint, primer3, primer5 = load_adapters(adapter)
 
     # Trim adapters
-    trim_adapters(input, splint, primer3, primer5, threads)
+    split_and_clean(input, splint, primer3, primer5, threads)
 
     # Trim adapters
     # ccs_reads, non_reads, reads_summary = trim_adapters(input, splint, primer3, primer5, threads)

@@ -44,7 +44,7 @@ ccs \
   -t 16
 
 # Generate consensus sequences
-python /path/to/generate_consensus.py \
+python /path/to/consensus.py \
   -i sample.ccs.fa \
   -o sample.clean.fa \
   -s sample.qc_summary.txt \
