@@ -1,9 +1,5 @@
-#! /usr/bin/env python
-# -*- encoding:utf-8 -*-
-import os
 import sys
 import time
-import gzip
 import logging
 from multiprocessing.managers import BaseManager
 
@@ -88,53 +84,3 @@ def find_logger_basefilename(logger):
     else:
         log_file = find_logger_basefilename(parent)
     return log_file
-
-
-def to_str(bytes_or_str):
-    """
-    Return Instance of str
-    """
-    if isinstance(bytes_or_str, bytes):
-        value = bytes_or_str.decode('utf-8')
-    else:
-        value = bytes_or_str
-    return value
-
-
-def to_bytes(bytes_or_str):
-    """
-    Return Instance of bytes
-    """
-    if isinstance(bytes_or_str, str):
-        value = bytes_or_str.encode('utf-8')
-    else:
-        value = bytes_or_str
-    return value
-
-
-def load_fasta(fname, is_gz=False):
-    sequences = {}
-    seq_id = None
-    seq = ''
-    f = gzip.open(fname, 'rb') if is_gz else open(fname, 'r')
-    for line in f:
-        if to_str(line).startswith('>'):
-            if seq_id is not None:
-                sequences[seq_id] = seq
-            seq_id = to_str(line).rstrip().lstrip('>')
-            seq = ''
-        else:
-            seq += to_str(line).rstrip()
-    sequences[seq_id] = seq
-    f.close()
-    return sequences
-
-
-def grouper(iterable, n, fillvalue=None):
-    """
-    Collect data info fixed-length chunks or blocks
-    grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
-    """
-    from itertools import zip_longest
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=None)

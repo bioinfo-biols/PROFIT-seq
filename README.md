@@ -4,6 +4,7 @@ Scripts for full spectrum transcriptome sequencing
 # Installation
 
 Step 1. Clone this repository to your computer
+
 ```bash
 git clone https://github.com/bioinfo-biols/full-spectrum-sequencing.git
 cd full-spectrum-sequencing
@@ -17,9 +18,13 @@ source ./venv/bin/activate
 
 Step 3. Install the modified version of ssw
 ```bash
-git clone https://github.com/Kevinzjy/ssw
-cd ssw
-python setup.py install
+# Install pyssw
+git clone https://github.com/Kevinzjy/pyssw.git
+cd pyssw & make 
+
+# Install Porechop
+git clone https://github.com/artic-network/Porechop.git
+cd Porechop && python setup.py install
 ```
 
 # Usage
