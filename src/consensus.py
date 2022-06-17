@@ -146,6 +146,7 @@ def worker(chunk, splint, primer3, primer5):
                 tmp_summary["Read_type"] = "Non-FL"
                 strand_seq = seq
 
+        # Trim adapters
         if strand_seq:
             tmp_summary["Strand_len"] = len(strand_seq)
             cleaned_seq, trim_summary = trim_strand_primer(strand_seq, primer3, primer5)
