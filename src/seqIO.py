@@ -96,3 +96,7 @@ def load_fastx(fname):
     for seq_id, seq, sep, qual in yield_fastx(fname):
         sequences[seq_id] = seq
     return sequences
+
+
+def count_fastx(fname):
+    return sum([1 for _ in yield_fastx(fname)])

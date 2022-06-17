@@ -14,9 +14,20 @@ from spoa import poa
 from pyccs import find_consensus
 
 from logger import get_logger, ProgressBar
-from seqIO import load_fastx, yield_fastx, revcomp
-from utils import grouper, align_sequence
-LOGGER = get_logger()
+from seqIO import count_fastx, load_fastx, yield_fastx, revcomp
+from utils import align_sequence
+LOGGER = get_logger("FS-seq", debugging=False)
+Columns = [
+    'Read_id', "Read_type", 'Seq_len', 'Splint_hit', 'Segment_len',
+    'Consensus_split', 'Consensus_splint_pos', 'Consensus_splint_type', 'Consensus_qc_tag', 'Strand_len',
+    'Primer3', 'Primer5', 'Primer_qc_tag', 'Cleaned_len'
+]
+FL_Output = None
+NonFL_output = None
+Summary_output = None
+Processed, Total = 0, 0
+FL_reads, NonFL_reads = 0, 0
+Prog = ProgressBar()
 
 
 def load_adapters(adapter_fa):
@@ -44,14 +55,24 @@ def _ret_callback(ret):
     """
     Callback for updating output files in multiprocessing
     """
-    # global Processed, Output
-    # read_num, ret_lines = ret
+    global Processed, Output, FL_reads, NonFL_reads
     with LOCK:
-        pass
-        # for line in ret_lines:
-        #     Output.write('\t'.join([str(x) for x in line]) + '\n')
-        # Processed += read_num
-        # Prog.update(100 * Processed / Total, is_force=True)
+        for cleaned_seq, read_summary in ret:
+            read_id = read_summary['Read_id'].split(' ')[0]
+            tmp_line = [read_summary[col] if col in read_summary else "-" for col in Columns]
+            Summary_output.write("\t".join([str(x) for x in tmp_line]) + "\n")
+
+            if cleaned_seq is not None:
+                if read_summary["Read_type"] in ["FL-splint", "FL-CCS"]:
+                    FL_Output.write(f">{read_id}\n{cleaned_seq}\n")
+                    FL_reads += 1
+                else:
+                    NonFL_output.write(f">{read_id}\n{cleaned_seq}\n")
+                    NonFL_reads += 1
+
+        # LOGGER.debug(f"Processed {n_fl}/{n_nonfl}/{n_total} ({100*n_fl/n_total:.2f}%) reads")
+        Processed += len(ret)
+        Prog.update(100 * Processed / Total, is_force=True)
 
 
 def split_and_clean(input_fa, splint, primer3, primer5, threads):
@@ -60,35 +81,25 @@ def split_and_clean(input_fa, splint, primer3, primer5, threads):
     2. Trim 10x 5'- and 3'- adapters
     """
     from multiprocessing import Pool
+    global Total
 
     pool = Pool(threads)
     jobs = []
 
-    chunk_size = 10_000
+    chunk_size = 1_000
     chunk = []
+    Prog.update(0)
     for record in yield_fastx(input_fa):
         chunk.append(record)
         if len(chunk) >= chunk_size:
             jobs.append(pool.apply_async(worker, (chunk, splint, primer3, primer5,),
                                          callback=_ret_callback, error_callback=_err_callback, ))
             chunk = []
-            break
     pool.close()
-
-    res, summary = [], []
-    n = 0
-    prog = ProgressBar()
-    prog.update(0)
-    for job in jobs:
-        tmp_res, tmp_summary = job.get()
-        res += tmp_res
-        summary += tmp_summary
-        n += 1
-        prog.update(100 * n / len(jobs))
     pool.join()
-    prog.update(100)
-    
-    return res, summary 
+    Prog.close()
+
+    return 0
 
 
 def worker(chunk, splint, primer3, primer5):
@@ -96,18 +107,59 @@ def worker(chunk, splint, primer3, primer5):
     _primer3 = Adapter(primer3, ssw.Aligner(primer3, match=2, mismatch=4, gap_open=4, gap_extend=2))
     _primer5 = Adapter(primer5, ssw.Aligner(primer5, match=2, mismatch=4, gap_open=4, gap_extend=2))
 
+    ret = []
     for read_id, seq, sep, qual in chunk:
-        segment_str, ccs_seq = split_by_splint(seq, _splint, _primer3, _primer5)
-        if ccs_seq is None:
-            pass
+        tmp_summary = {
+            'Read_id': read_id,
+            'Seq_len': len(seq),
+        }
 
-        segment_str, ccs_seq = find_consensus(seq)
-        if ccs_seq is None:
-            pass
+        # Split by splint sequences
+        segment_str, consensus_seq = split_by_splint(seq, _splint)
+        if segment_str is None:
+            tmp_summary['Splint_hit'] = "No splint hits"
+        else:
+            tmp_summary['Splint_hit'] = segment_str
+
+        if consensus_seq is None:
+            tmp_summary['Segment_len'] = "Not detected"
+        else:
+            tmp_summary['Segment_len'] = len(consensus_seq)
+
+        if consensus_seq is not None:
+            strand_seq = consensus_seq
+            tmp_summary["Read_type"] = "FL-splint"
+        else:
+            # Split by de novo CCS
+            ccs_str, ccs_seq = find_consensus(seq)
+            if ccs_str is not None:
+                tmp_summary["Consensus_split"] = ccs_str
+            else:
+                tmp_summary["Consensus_split"] = "No CCS detected"
+
+            # Fall back to full-length sequence
+            if ccs_seq is not None:
+                tmp_summary["Read_type"] = "FL-CCS"
+                strand_seq, reorder_summary = rearrange_by_splint(ccs_seq, splint)
+                tmp_summary.update(reorder_summary)
+            else:
+                tmp_summary["Read_type"] = "Non-FL"
+                strand_seq = seq
+
+        if strand_seq:
+            tmp_summary["Strand_len"] = len(strand_seq)
+            cleaned_seq, trim_summary = trim_strand_primer(strand_seq, primer3, primer5)
+            tmp_summary.update(trim_summary)
+        else:
+            tmp_summary['Strand_len'] = 0
+            cleaned_seq = None
+
+        ret.append((cleaned_seq, tmp_summary))
+
+    return ret
 
 
-
-def split_by_splint(seq, splint, primer3, primer5, p_indel=0.1):
+def split_by_splint(seq, splint, p_indel=0.1):
     for_aln = splint.aligner.align(seq)
     rev_aln = splint.aligner.align(revcomp(seq))
     strand_seq = revcomp(seq) if for_aln.score < rev_aln.score else seq
@@ -117,14 +169,18 @@ def split_by_splint(seq, splint, primer3, primer5, p_indel=0.1):
 
     segments = []
     segment_str = []
-    segments.append(strand_seq[:splint_hits[0][0]])
-    segment_str.append(f"0:{splint_hits[0][0]}")
+    if splint_hits[0][0] > 50:
+        segments.append(strand_seq[:splint_hits[0][0]])
+        segment_str.append(f"0:{splint_hits[0][0]}")
+
     if len(splint_hits) > 1:
         for l_hit, r_hit in zip(splint_hits[:-1], splint_hits[1:]):
             segments.append(strand_seq[l_hit[1]:r_hit[0]])
             segment_str.append(f"{l_hit[1]}:{r_hit[0]}")
-    segments.append(strand_seq[splint_hits[-1][1]:])
-    segment_str.append(f"{splint_hits[-1][1]}")
+
+    if len(seq) - splint_hits[-1][1] > 50:
+        segments.append(strand_seq[splint_hits[-1][1]:])
+        segment_str.append(f"{splint_hits[-1][1]}:{len(seq)}")
 
     if len(segments) > 3:
         d_estimate = np.array([len(i) for i in segments][1:-1])
@@ -133,7 +189,8 @@ def split_by_splint(seq, splint, primer3, primer5, p_indel=0.1):
         if np.abs(d_estimate-d_mean).max() > d_delta:
             return segment_str, None
 
-    ccs, msa = poa(sorted(segments, key=lambda x: len(x), reverse=True))
+    ccs, _ = poa(sorted(segments, key=lambda x: len(x), reverse=True))
+
     return segment_str, ccs
 
 
@@ -156,15 +213,15 @@ def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=Tr
         else:
             en_clip = None
         return recursive_aln_splint(st_clip, splint, shift, st_align, False) + \
-               [(hit.query_end+shift, hit.query_end+shift, hit.ref_begin, hit.ref_end)] + \
-               recursive_aln_splint(en_clip, splint, shift + hit.query_end, False, en_align)
+               [(hit.query_begin+shift, hit.query_end+shift, hit.ref_begin, hit.ref_end)] + \
+               recursive_aln_splint(en_clip, splint, shift+hit.query_end, False, en_align)
 
     # Head-to-head alignment
     # ----------^---------^
     #           ^=========^====================
     if st_align and hit.ref_begin >= 5 and hit.query_begin <= 5 and hit.ref_end-hit.ref_begin >= 10:
         en_clip = strand_seq[hit.query_end:]
-        return [(hit.query_end+shift, hit.query_end+shift, hit.ref_begin, hit.ref_end)] + \
+        return [(hit.query_begin+shift, hit.query_end+shift, hit.ref_begin, hit.ref_end)] + \
                recursive_aln_splint(en_clip, splint, shift+hit.query_end, False, en_align)
 
     # Tail-to-Tail alignment
@@ -173,7 +230,7 @@ def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=Tr
     if en_align and hit.ref_begin <= 5 and hit.query_begin >= len(strand_seq)-5 and hit.ref_end-hit.ref_begin >= 10:
         st_clip = strand_seq[:hit.query_begin]
         return recursive_aln_splint(st_clip, splint, shift, st_align, False) + \
-               [(hit.query_end+shift, hit.query_end+shift, hit.ref_begin, hit.ref_end)]
+               [(hit.query_begin+shift, hit.query_end+shift, hit.ref_begin, hit.ref_end)]
 
     # No hit
     return []
@@ -188,113 +245,65 @@ def rearrange_by_splint(strand_seq, splint):
     rst, ren = splint_aln.ref_begin, splint_aln.ref_end
     if ren <= seq_len:
         ordered = strand_seq[ren:] + strand_seq[:rst]
-        tmp_summary['splint_pos'] = '{}:{}'.format(rst, ren)
-        tmp_summary['splint_type'] = 'middle'
+        tmp_summary['Consensus_splint_pos'] = '{}:{}'.format(rst, ren)
+        tmp_summary['Consensus_splint_type'] = 'middle'
     elif rst >= seq_len:
         ordered = strand_seq[ren-seq_len:] + strand_seq[:rst-seq_len]
-        tmp_summary['splint_pos'] = '{}:{}'.format(rst-seq_len, ren-seq_len)
-        tmp_summary['splint_type'] = 'middle'
+        tmp_summary['Consensus_splint_pos'] = '{}:{}'.format(rst-seq_len, ren-seq_len)
+        tmp_summary['Consensus_splint_type'] = 'middle'
     else:
         ordered = strand_seq[ren-seq_len:rst]
-        tmp_summary['splint_pos'] = '{}:|:{}'.format(ren-seq_len, rst)
-        tmp_summary['splint_type'] = 'junction'
+        tmp_summary['Consensus_splint_pos'] = '{}:|:{}'.format(ren-seq_len, rst)
+        tmp_summary['Consensus_splint_type'] = 'junction'
 
     # Filter by qc tag
     splint_cov = (splint_aln.query_end - splint_aln.query_begin) / len(splint)
     if splint_cov < 0.75:
-        tmp_summary['qc_tag'] = 'no_splint'
+        tmp_summary['Consensus_qc_tag'] = 'no_splint'
         return None, tmp_summary
 
     if len(ordered) < 50:
-        tmp_summary['qc_tag'] = 'fragment_smaller_than_50'
+        tmp_summary['Consensus_qc_tag'] = 'fragment_smaller_than_50'
         return None, tmp_summary
 
-    tmp_summary['fragment_len'] = len(ordered)
     return ordered, tmp_summary
 
 
-# def trim_ccs(chunk, splint, primer3, primer5):
-#     import ssw
-#     summary, res = [], []
-#     for read_id, segments, seq_len, seq in chunk:
-#         tmp_summary = {
-#             'read_id': read_id,
-#             'segments': segments,
-#             'seq_len': seq_len,
-#         }
-#
-#         # Detect splint
-#         splint_alinger = ssw.Aligner(seq*2, match=2, mismatch=4, gap_open=4, gap_extend=2)
-#         splint_aln = align_sequence(splint_alinger, splint)
-#         # print(repr(splint_aln))
-#
-#         rst, ren = splint_aln.ref_begin, splint_aln.ref_end
-#         if ren <= seq_len:
-#             ordered = seq[ren:] + seq[:rst]
-#             tmp_summary['splint_pos'] = '{}:{}'.format(rst, ren)
-#             tmp_summary['splint_type'] = 'middle'
-#         elif rst >= seq_len:
-#             ordered = seq[ren-seq_len:] + seq[:rst-seq_len]
-#             tmp_summary['splint_pos'] = '{}:{}'.format(rst-seq_len, ren-seq_len)
-#             tmp_summary['splint_type'] = 'middle'
-#         else:
-#             ordered = seq[ren-seq_len:rst]
-#             tmp_summary['splint_pos'] = '{}:|:{}'.format(ren-seq_len, rst)
-#             tmp_summary['splint_type'] = 'junction'
-#
-#         # Filter by qc tag
-#         splint_cov = (splint_aln.query_end - splint_aln.query_begin) / len(splint)
-#         if splint_cov < 0.75:
-#             tmp_summary['qc_tag'] = 'no_splint'
-#             summary.append(tmp_summary)
-#             continue
-#
-#         if len(ordered) < 50:
-#             tmp_summary['qc_tag'] = 'fragment_smaller_than_50'
-#             summary.append(tmp_summary)
-#             continue
-#
-#         tmp_summary['fragment_len'] = len(ordered)
-#
-#         # Trimmed adapters
-#         ordered_aligner = ssw.Aligner(ordered, match=1, mismatch=1, gap_open=1, gap_extend=1,)
-#         aln3 = align_sequence(ordered_aligner, primer3)
-#         aln5 = align_sequence(ordered_aligner, primer5)
-#         tmp_summary['primer3'] = '{}:{}'.format(aln3.ref_begin, aln3.ref_end)
-#         tmp_summary['primer5'] = '{}:{}'.format(aln5.ref_begin, aln5.ref_end)
-#
-#         aln3_cov = (aln3.query_end - aln3.query_begin) / len(primer3)
-#         aln5_cov = (aln5.query_end - aln5.query_begin) / len(primer5)
-#         if aln3_cov < 0.6 and aln5_cov < 0.6:
-#             tmp_summary['qc_tag'] = 'no_both_adapters'
-#             summary.append(tmp_summary)
-#             continue
-#         elif aln3_cov < 0.6:
-#             tmp_summary['qc_tag'] = 'no_3prime_adapter'
-#             summary.append(tmp_summary)
-#             continue
-#         elif aln5_cov < 0.6:
-#             tmp_summary['qc_tag'] = 'no_5prime_adapter'
-#             summary.append(tmp_summary)
-#             continue
-#         else:
-#             pass
-#
-#         # Generate consensus reads
-#         adapters = sorted([[aln3.ref_begin, aln3.ref_end], [aln5.ref_begin, aln5.ref_end]])
-#         trimmed = ordered[adapters[0][1]:adapters[1][0]]
-#         if len(trimmed) < 50:
-#             tmp_summary['qc_tag'] = 'clean_smaller_than_50'
-#             summary.append(tmp_summary)
-#             continue
-#
-#         tmp_summary['qc_tag'] = 'pass'
-#         tmp_summary['clean_len'] = len(trimmed)
-#         summary.append(tmp_summary)
-#
-#         res.append([read_id, trimmed])
-#
-#     return res, summary
+def trim_strand_primer(strand_seq, primer3, primer5):
+    tmp_summary = {}
+    # Trimmed adapters
+    strand_aligner = ssw.Aligner(strand_seq, match=1, mismatch=1, gap_open=1, gap_extend=1,)
+    aln3 = align_sequence(strand_aligner, revcomp(primer3), strandness=True)
+    aln5 = align_sequence(strand_aligner, primer5, strandness=True)
+
+    tmp_summary['Primer3'] = '{}:{}'.format(aln3.ref_begin, aln3.ref_end)
+    tmp_summary['Primer5'] = '{}:{}'.format(aln5.ref_begin, aln5.ref_end)
+
+    aln3_cov = (aln3.query_end - aln3.query_begin) / len(primer3)
+    aln5_cov = (aln5.query_end - aln5.query_begin) / len(primer5)
+    if aln3_cov < 0.6 and aln5_cov < 0.6:
+        tmp_summary['Primer_qc_tag'] = 'no_both_adapters'
+        return None, tmp_summary
+    elif aln3_cov < 0.6:
+        tmp_summary['Primer_qc_tag'] = 'no_3prime_adapter'
+        return None, tmp_summary
+    elif aln5_cov < 0.6:
+        tmp_summary['Primer_qc_tag'] = 'no_5prime_adapter'
+        return None, tmp_summary
+    else:
+        pass
+
+    # Generate consensus reads
+    adapters = sorted([[aln3.ref_begin, aln3.ref_end], [aln5.ref_begin, aln5.ref_end]])
+    trimmed = strand_seq[adapters[0][1]:adapters[1][0]]
+    if len(trimmed) < 50:
+        tmp_summary['Primer_qc_tag'] = 'clean_smaller_than_50'
+        return None, tmp_summary
+
+    tmp_summary['Primer_qc_tag'] = 'pass'
+    tmp_summary['Cleaned_len'] = len(trimmed)
+
+    return trimmed, tmp_summary
 
 
 # def write_consensus(out_file, cleaned_reads, summary_file, reads_summary):
@@ -331,21 +340,35 @@ def rearrange_by_splint(strand_seq, splint):
 @click.option('--threads', '-t', type=int, default=os.cpu_count(),
               help='number of threads.')            
 def main(adapter, input, ccs, non, summary, threads):
+    global Total, FL_Output, NonFL_output, Summary_output
+
+    # Run function
+    if Path(sys.argv[0]).name != 'FS-seq':
+        LOGGER.setLevel(10)
+        for handler in LOGGER.handlers:
+            handler.setLevel(10)
+
     LOGGER.info('Processing consensus reads with {} threads'.format(threads))
 
     # Load adapter
     splint, primer3, primer5 = load_adapters(adapter)
 
-    # Trim adapters
-    split_and_clean(input, splint, primer3, primer5, threads)
+    FL_Output = open(ccs, 'w')
+    NonFL_output = open(non, 'w')
+    Summary_output = open(summary, 'w')
+
+    Total = count_fastx(input)
+    LOGGER.info(f"Total {Total} reads")
 
     # Trim adapters
-    # ccs_reads, non_reads, reads_summary = trim_adapters(input, splint, primer3, primer5, threads)
+    status = split_and_clean(input, splint, primer3, primer5, threads)
 
-    # Output
-    # status = write_consensus(out, cleaned_reads, summary, reads_summary)
-    # for i, j in status.items():
-    #     LOGGER.info('Tag: {}, numbers: {}'.format(i, j))
+    FL_Output.close()
+    NonFL_output.close()
+    Summary_output.close()
+
+    LOGGER.info(f"Processed {FL_reads}/{NonFL_reads}/{Total} ({100*(FL_reads+NonFL_reads)/Total:.2f}% cleaned) reads")
+    LOGGER.info(f"Finished!")
 
 
 if __name__ == '__main__':
