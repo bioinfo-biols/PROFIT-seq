@@ -14,8 +14,7 @@ from spoa import poa
 from pyccs import find_consensus
 
 from PROFIT_seq.logger import get_logger, ProgressBar
-from PROFIT_seq.seqIO import count_fastx, load_fastx, yield_fastx, revcomp
-from PROFIT_seq.utils import align_sequence
+from PROFIT_seq.seqIO import count_fastx, load_fastx, yield_fastx, revcomp, align_sequence
 LOGGER = get_logger("FS-seq", debugging=False)
 Columns = [
     'Read_id', "Read_type", 'Seq_len', 'Splint_hit', 'Segment_len',

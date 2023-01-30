@@ -1,5 +1,26 @@
 import gzip
-from PROFIT_seq.utils import to_str, to_bytes
+
+
+def to_bytes(bytes_or_str):
+    """
+    Return Instance of bytes
+    """
+    if isinstance(bytes_or_str, str):
+        value = bytes_or_str.encode('utf-8')
+    else:
+        value = bytes_or_str
+    return value
+
+
+def to_str(bytes_or_str):
+    """
+    Return Instance of str
+    """
+    if isinstance(bytes_or_str, bytes):
+        value = bytes_or_str.decode('utf-8')
+    else:
+        value = bytes_or_str
+    return value
 
 
 def revcomp(seq):
@@ -79,3 +100,16 @@ def load_fastx(fname):
 
 def count_fastx(fname):
     return sum([1 for _ in yield_fastx(fname)])
+
+
+def align_sequence(aligner, query, strandness=True):
+    for_aln = aligner.align(query)
+    if strandness:
+        return for_aln
+
+    rev_aln = aligner.align(revcomp(query))
+    if for_aln.score > rev_aln.score:
+        return for_aln
+    else:
+        return rev_aln
+

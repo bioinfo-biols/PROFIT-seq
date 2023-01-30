@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import sys
 import gzip
 import click
+from pathlib import Path
+sys.path.append(Path(__file__).parent.parent)
 
 from PROFIT_seq.seqIO import yield_fastx
 from PROFIT_seq.logger import get_logger
+from PROFIT_seq.utils import to_bytes
 LOGGER = get_logger('PROFIT-seq')
 
 
@@ -20,10 +24,10 @@ def main(infile, outfile, start, end):
     cnt = 0
     with gzip.open(outfile, 'wb') as out:
         for seq_id, seq, sep, qual in yield_fastx(infile):
-            header = dict([i.split('=') for i in seq_id.split(' ')])
+            header = dict([i.split('=') for i in seq_id.split(' ')[1:]])
             ch = int(header['ch'])
-            if start <= ch < end:
-                out.write(f"@{seq_id}\n{seq}\n{sep}\n{qual}\n")
+            if start <= ch <= end:
+                out.write(to_bytes(f"@{seq_id}\n{seq}\n{sep}\n{qual}\n"))
                 cnt += 1
     LOGGER.info(f"Finished processing {cnt} reads")
 

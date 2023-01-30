@@ -23,9 +23,6 @@ from collections import defaultdict, Counter
 from minknow_api import Connection
 from pyguppy_client_lib.pyclient import PyGuppyClient
 from pyguppy_client_lib.helper_functions import package_read
-
-from PROFIT_seq import env
-from PROFIT_seq.seqIO import revcomp
 Logger = getLogger('PROFIT_seq')
 
 
@@ -217,51 +214,6 @@ def load_prim_job(form):
     return job
 
 
-def split_segments(segments, is_closed=False):
-    """Split segments into sub intervals"""
-    if len(segments) == 0:
-        return [], {}
-
-    if len(segments) == 1:
-        return segments, {segments[0]: [0, ]}
-
-    nodes = []
-    for i, j in segments:
-        if is_closed:
-            nodes += [i-1, j]
-        else:
-            nodes += [i, j]
-    nodes = sorted(list(set(nodes)))
-    edges = [[i, j] for i, j in zip(nodes[:-1], nodes[1:])]
-
-    segments_d = defaultdict(list)
-    for x in sorted(list(set(segments))):
-        p = x[0]-1 if is_closed else x[0]
-        q = x[1]
-        for i, (l_st, l_en) in enumerate(edges):
-            if q <= l_st or l_en <= p:
-                continue
-            segments_d[x].append(i)
-
-    return edges, segments_d
-
-
-def get_jobs():
-    time_sections = [job['time'] for job in env.Jobs]
-    time_nodes, time_d = split_segments(time_sections, False)
-
-    ch_sections = [job['ch'] for job in env.Jobs]
-    ch_nodes, ch_d = split_segments(ch_sections, True)
-
-    job_mtx = defaultdict(dict)
-    for job in env.Jobs:
-        for i in time_d[job['time']]:
-            for j in ch_d[job['ch']]:
-                job_mtx[i].setdefault(j, []).append(job)
-
-    return time_nodes, ch_nodes, job_mtx
-
-
 def hash_filename(fname):
     """Generate hash of file"""
     return hashlib.sha256(str(fname).encode()).hexdigest()
@@ -307,15 +259,3 @@ def flatten(x):
 
     flatted_list = list(itertools.chain(*x))
     return flatted_list
-
-
-def align_sequence(aligner, query, strandness=True):
-    for_aln = aligner.align(query)
-    if strandness:
-        return for_aln
-
-    rev_aln = aligner.align(revcomp(query))
-    if for_aln.score > rev_aln.score:
-        return for_aln
-    else:
-        return rev_aln

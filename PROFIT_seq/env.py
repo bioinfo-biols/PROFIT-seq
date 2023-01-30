@@ -8,7 +8,7 @@ from collections import defaultdict
 from read_until import ReadUntilClient
 from pyguppy_client_lib.pyclient import PyGuppyClient
 
-from PROFIT_seq.utils import Severity, send_message
+from PROFIT_seq.utils import Severity, send_message 
 Logger = getLogger("PROFIT_seq")
 
 # Initialized server
@@ -84,3 +84,49 @@ def initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx)
     Worker['message'] = 'Ready for sequencing'
 
     return 0
+
+
+def split_segments(segments, is_closed=False):
+    """Split segments into sub intervals"""
+    if len(segments) == 0:
+        return [], {}
+
+    if len(segments) == 1:
+        return segments, {segments[0]: [0, ]}
+
+    nodes = []
+    for i, j in segments:
+        if is_closed:
+            nodes += [i-1, j]
+        else:
+            nodes += [i, j]
+    nodes = sorted(list(set(nodes)))
+    edges = [[i, j] for i, j in zip(nodes[:-1], nodes[1:])]
+
+    segments_d = defaultdict(list)
+    for x in sorted(list(set(segments))):
+        p = x[0]-1 if is_closed else x[0]
+        q = x[1]
+        for i, (l_st, l_en) in enumerate(edges):
+            if q <= l_st or l_en <= p:
+                continue
+            segments_d[x].append(i)
+
+    return edges, segments_d
+
+
+def get_jobs():
+    time_sections = [job['time'] for job in env.Jobs]
+    time_nodes, time_d = split_segments(time_sections, False)
+
+    ch_sections = [job['ch'] for job in env.Jobs]
+    ch_nodes, ch_d = split_segments(ch_sections, True)
+
+    job_mtx = defaultdict(dict)
+    for job in env.Jobs:
+        for i in time_d[job['time']]:
+            for j in ch_d[job['ch']]:
+                job_mtx[i].setdefault(j, []).append(job)
+
+    return time_nodes, ch_nodes, job_mtx
+

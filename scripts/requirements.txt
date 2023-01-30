@@ -1,4 +1,0 @@
-click>=8.0.1
-pyspoa>=0.0.8
-pyccs>=1.1.0
-numpy>=1.22.4
