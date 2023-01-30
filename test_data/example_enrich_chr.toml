@@ -1,0 +1,14 @@
+[[jobs]]
+name = "Enrichment"
+time = [0, 240]
+ch = [1, 512]
+bc = "all"
+target = [
+  {region = ["chr1", "0", "248956422"], action= "stop_receiving"},
+  {region = ["chr11", "0", "135086622"], action = "stop_receiving"},
+  {region = ["chr5", "0", "181538259"], action = "stop_receiving"},
+  {region = ["chr2", "0", "242193529"], action = "stop_receiving"},
+  {region = ["chr12", "0", "133275309"], action = "stop_receiving"},
+  {region = "miss", action="unblock"},
+  {region = "unmapped", action="unblock"},
+]

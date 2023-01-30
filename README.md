@@ -1,3 +1,27 @@
+# PROFIT-seq: Targeted and accurate whole transcriptome sequencing in a programmable manner
+
+Programmable full-length isoform transcriptome sequencing
+
+## Author
+
+Authors: Jinyang Zhang(zhangjinyang@biols.ac.cn), Fangqing Zhao(zhfq@biols.ac.cn)
+
+Maintainer: Jinyang Zhang
+
+## Release Notes
+
+- version 1.0: First released version
+
+## License
+
+The code is released under the MIT License. See the LICENSE file for more detail
+
+## Citing CIRI-long
+
+Under submission
+
+# Documentation
+
 ## 1. Installation
 
 ### 1.1 Install MinKNOW and corresponding gpu version of ont-guppy from the [Nanopore community](https://community.nanoporetech.com/downloads)
@@ -38,11 +62,13 @@ ssh minknow@localhost
 
 ```bash
 cd /opt
-git clone https://github.com/bioinfo-biols/PROFIT-seq.git
+git clone --recursive https://github.com/bioinfo-biols/PROFIT-seq.git
 cd PROFIT-seq
 ```
 
 - Create a virtual environment for running these scripts
+
+- **NOTE: please use python 3.8.10**
 
 ```bash
 virtualenv venv
@@ -56,7 +82,7 @@ pip install -r requirements.txt
 pip install ont-pyguppy-client-lib==5.1.15
 ```
 
-- (Optional) Install requirements for analysis PROFIT-seq data
+Note: if you only want to perform PROFIT-seq analysis (e.g. run PROFIT-seq using HPC), use step0_requirements.txt instead
 
 ```bash
 make lib
@@ -166,6 +192,8 @@ At lease one of the following combination of actions are required for a valid jo
 
 Dependencies:
 - Reference genome & annotation
+- Guppy
+- Porechop
 - Minimap2
 - samtools
 - StringTie2
@@ -190,7 +218,7 @@ Dependencies:
 For instance, if you want to demultiplex reads from channel 1 to 256
 
 ```bash
-python3 scripts/step1_demultiplex.py -i input.fastq.gz -o sample1.fastq.gz --start 0 --end 256
+python3 scripts/step1_demultiplex.py -i input.fastq.gz -o sample1.fastq.gz --start 1 --end 256
 ```
 
 ```
@@ -209,7 +237,6 @@ Options:
 Trim nanopore sequencing adapters using Porechop
 
 ```bash
-# e.g.
 porechop -i sample1.fastq.gz -o sample1.trimmed.fastq.gz --threads 32 --check_reads 1000
 ```
 

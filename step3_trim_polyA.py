@@ -4,7 +4,7 @@ import click
 from pathlib import Path
 from PROFIT_seq.logger import get_logger
 from PROFIT_seq.seqIO import yield_fastx
-LOGGER = get_logger("FS-seq", debugging=False)
+LOGGER = get_logger("PROFIT-seq", debugging=False)
 
 
 def find_polyA(seq, tail_len=30, k=10, max_A=8):

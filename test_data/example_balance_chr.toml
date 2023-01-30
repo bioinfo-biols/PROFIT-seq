@@ -1,0 +1,34 @@
+[[jobs]]
+name = "Balance_contigs"
+time = [0, 6000]
+ch = [1, 512]
+bc = "all"
+target = [
+  {region = ["chr1", "0", "248956422"], action= "balance"},
+  {region = ["chr2", "0", "242193529"], action = "balance"},
+  {region = ["chr3", "0", "198295559"], action = "balance"},
+  {region = ["chr4", "0", "190214555"], action = "balance"},
+  {region = ["chr5", "0", "181538259"], action = "balance"},
+  {region = ["chr6", "0", "170805979"], action = "balance"},
+  {region = ["chr7", "0", "159345973"], action = "balance"},
+  {region = ["chr8", "0", "145138636"], action = "balance"},
+  {region = ["chr9", "0", "138394717"], action = "balance"},
+  {region = ["chr10", "0", "133797422"], action = "balance"},
+  {region = ["chr11", "0", "135086622"], action = "balance"},
+  {region = ["chr12", "0", "133275309"], action = "balance"},
+  {region = ["chr13", "0", "114364328"], action = "balance"},
+  {region = ["chr14", "0", "107043718"], action = "balance"},
+  {region = ["chr15", "0", "101991189"], action = "balance"},
+  {region = ["chr16", "0", "90338345"], action = "balance"},
+  {region = ["chr17", "0", "83257441"], action = "balance"},
+  {region = ["chr18", "0", "80373285"], action = "balance"},
+  {region = ["chr19", "0", "58617616"], action = "balance"},
+  {region = ["chr20", "0", "64444167"], action = "balance"},
+  {region = ["chr21", "0", "46709983"], action = "balance"},
+  {region = ["chr22", "0", "50818468"], action = "balance"},
+  {region = ["chrX", "0", "156040895"], action = "balance"},
+  {region = ["chrY", "0", "57227415"], action = "balance"},
+  {region = ["chrM", "0", "16569"], action = "balance"},
+  {region = "unmapped", action = "unblock"},
+  {region = "miss", action="unblock"}
+]

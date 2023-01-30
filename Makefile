@@ -10,5 +10,4 @@ help:
 
 lib:
 	cd vendor/pyssw && make
-	#cd vendor/Porechop && python setup.py install
 

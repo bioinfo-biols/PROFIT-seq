@@ -15,7 +15,7 @@ from pyccs import find_consensus
 
 from PROFIT_seq.logger import get_logger, ProgressBar
 from PROFIT_seq.seqIO import count_fastx, load_fastx, yield_fastx, revcomp, align_sequence
-LOGGER = get_logger("FS-seq", debugging=False)
+LOGGER = get_logger("PROFIT-seq", debugging=False)
 Columns = [
     'Read_id', "Read_type", 'Seq_len', 'Splint_hit', 'Segment_len',
     'Consensus_split', 'Consensus_splint_pos', 'Consensus_splint_type', 'Consensus_qc_tag', 'Strand_len',
