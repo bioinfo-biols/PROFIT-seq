@@ -24,9 +24,9 @@ from minknow_api import Connection
 from pyguppy_client_lib.pyclient import PyGuppyClient
 from pyguppy_client_lib.helper_functions import package_read
 
-from PROFITseq import env
-from PROFITseq.seqIO import revcomp
-Logger = getLogger('PROFITseq')
+from PROFIT_seq import env
+from PROFIT_seq.seqIO import revcomp
+Logger = getLogger('PROFIT_seq')
 
 
 class Severity(IntEnum):

@@ -1,5 +1,5 @@
 import gzip
-from PROFITseq.utils import to_str, to_bytes
+from PROFIT_seq.utils import to_str, to_bytes
 
 
 def revcomp(seq):

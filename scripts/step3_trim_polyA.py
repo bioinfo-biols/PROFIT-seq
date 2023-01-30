@@ -2,8 +2,8 @@
 import sys
 import click
 from pathlib import Path
-from PROFITseq.logger import get_logger
-from PROFITseq.seqIO import yield_fastx
+from PROFIT_seq.logger import get_logger
+from PROFIT_seq.seqIO import yield_fastx
 LOGGER = get_logger("FS-seq", debugging=False)
 
 

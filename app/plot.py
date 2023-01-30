@@ -7,7 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from flask import Flask, render_template
 
-from PROFITseq import env
+from PROFIT_seq import env
 
 Action_color = {
     "unblock": "#a53f97", "stop_receiving": "#f57e20", "balance": "#90c6e7", "unblock all": "#17bb75",

@@ -8,8 +8,8 @@ from collections import defaultdict
 from read_until import ReadUntilClient
 from pyguppy_client_lib.pyclient import PyGuppyClient
 
-from PROFITseq.utils import Severity, send_message
-Logger = getLogger("PROFITseq")
+from PROFIT_seq.utils import Severity, send_message
+Logger = getLogger("PROFIT_seq")
 
 # Initialized server
 Client = None

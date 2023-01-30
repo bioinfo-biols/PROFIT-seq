@@ -2,8 +2,8 @@ import sys
 import click
 from pathlib import Path
 
-from PROFITseq.logger import get_logger
-Logger = get_logger("PROFITseq")
+from PROFIT_seq.logger import get_logger
+Logger = get_logger("PROFIT_seq")
 
 
 @click.command()
@@ -22,9 +22,9 @@ Logger = get_logger("PROFITseq")
 @click.version_option('0.2b')
 def main(minknow_host, minknow_port, guppy_address, guppy_config, dashboard_port, mm_idx):
     from app.server import app
-    from PROFITseq.env import initializer
+    from PROFIT_seq.env import initializer
 
-    if Path(sys.argv[0]).name != 'PROFITseq':
+    if Path(sys.argv[0]).name != 'PROFIT_seq':
         Logger.setLevel(10)
         for handler in Logger.handlers:
             handler.setLevel(10)

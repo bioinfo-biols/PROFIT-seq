@@ -2,8 +2,8 @@
 import gzip
 import click
 
-from PROFITseq.seqIO import yield_fastx
-from PROFITseq.logger import get_logger
+from PROFIT_seq.seqIO import yield_fastx
+from PROFIT_seq.logger import get_logger
 LOGGER = get_logger('PROFIT-seq')
 
 

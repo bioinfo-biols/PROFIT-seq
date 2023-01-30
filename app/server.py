@@ -5,12 +5,12 @@ import socket
 from logging import getLogger
 from threading import Thread
 from flask import Flask, render_template, url_for, request, jsonify
-from PROFITseq import env
-from PROFITseq.unblock import start_unblock
-from PROFITseq.utils import load_toml, load_prim_job
+from PROFIT_seq import env
+from PROFIT_seq.unblock import start_unblock
+from PROFIT_seq.utils import load_toml, load_prim_job
 from app.plot import plot_jobs
 
-Logger = getLogger("PROFITseq")
+Logger = getLogger("PROFIT_seq")
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
 
@@ -83,7 +83,7 @@ def stop():
 @app.route('/prog')
 def progress():
     """Update sequencing progress when query"""
-    from PROFITseq.utils import convert_time
+    from PROFIT_seq.utils import convert_time
     ptext = env.Worker['message']
     dtext = env.ProtocolRun['device_id']
     stext = env.ProtocolRun['sample'] if 'sample' in env.ProtocolRun else "TBD"

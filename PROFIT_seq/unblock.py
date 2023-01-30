@@ -9,9 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pyguppy_client_lib.pyclient import PyGuppyClient
 from minknow_api.acquisition_pb2 import MinknowStatus
 
-from PROFITseq import env
-from PROFITseq.utils import Severity, send_message, basecall, get_jobs
-Logger = getLogger("PROFITseq")
+from PROFIT_seq import env
+from PROFIT_seq.utils import Severity, send_message, basecall, get_jobs
+Logger = getLogger("PROFIT_seq")
 
 
 def worker_callback(fn):

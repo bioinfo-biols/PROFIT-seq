@@ -13,9 +13,9 @@ import ssw
 from spoa import poa
 from pyccs import find_consensus
 
-from PROFITseq.logger import get_logger, ProgressBar
-from PROFITseq.seqIO import count_fastx, load_fastx, yield_fastx, revcomp
-from PROFITseq.utils import align_sequence
+from PROFIT_seq.logger import get_logger, ProgressBar
+from PROFIT_seq.seqIO import count_fastx, load_fastx, yield_fastx, revcomp
+from PROFIT_seq.utils import align_sequence
 LOGGER = get_logger("FS-seq", debugging=False)
 Columns = [
     'Read_id', "Read_type", 'Seq_len', 'Splint_hit', 'Segment_len',
@@ -344,7 +344,7 @@ def main(adapter, input, ccs, non, summary, threads):
     global Total, FL_Output, NonFL_output, Summary_output
 
     # Run function
-    if Path(sys.argv[0]).name != 'PROFITseq':
+    if Path(sys.argv[0]).name != 'PROFIT_seq':
         LOGGER.setLevel(10)
         for handler in LOGGER.handlers:
             handler.setLevel(10)
