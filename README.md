@@ -15,6 +15,13 @@ systemctl daemon-reload
 service guppyd start
 ```
 
+Change the following settings in `/opt/ont/minknow/conf/package/sequencing/sequencing_MIN106_DNA.toml`
+
+```
+[analysis_configuration.read_detection]
+break_reads_after_seconds = 0.4
+```
+
 ### 1.3 Create password for the minknow user, and install python3 using system package manager of anaconda
 
 **NOTE: you need to run PROFIT-seq as user `minknow` to access the guppy and MinKNOW server correctly.** 
