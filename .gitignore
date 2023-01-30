@@ -131,3 +131,5 @@ dmypy.json
 tests/
 
 .idea
+
+.DS_Store
