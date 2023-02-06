@@ -9,12 +9,14 @@ Todo:
     * Add transcript coverage determine for RNA-seq
 
 """
+import os
 import sys
 import time
 import toml
 import hashlib
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from enum import IntEnum
 from logging import getLogger
 from itertools import zip_longest
@@ -259,3 +261,18 @@ def flatten(x):
 
     flatted_list = list(itertools.chain(*x))
     return flatted_list
+
+
+def check_dir(dir_name):
+    """
+    Create directory
+    """
+    dpath = Path(dir_name)
+    if dpath.exists():
+        if dpath.is_dir():
+            pass
+        else:
+            sys.exit(f'Directory: {dpath}, conflict with existed files')
+    else:
+        dpath.mkdir()
+    return dpath

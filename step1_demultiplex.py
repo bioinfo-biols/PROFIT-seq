@@ -21,6 +21,8 @@ LOGGER = get_logger('PROFIT-seq')
 @click.option('--end', '-en', type=int, required=True,
               help='end channel number.')
 def main(infile, outfile, start, end):
+    LOGGER.info(f"Start demultiplexing reads from channel {start}-{end}")
+
     cnt = 0
     with gzip.open(outfile, 'wb') as out:
         for seq_id, seq, sep, qual in yield_fastx(infile):

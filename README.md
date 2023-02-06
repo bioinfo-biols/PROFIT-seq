@@ -197,7 +197,6 @@ Dependencies:
 - Minimap2
 - samtools
 - StringTie2
-- gffcompare
 - gffread
 - Salmon
 
@@ -247,110 +246,58 @@ Generate full-length consensus reads and non full-length reads
 ```bash
 python3 scripts/step2_consensus.py \
     -i sample1.trimmed.fastq.gz \
-    -c sample1.trimmed.fl_reads.fa \
-    -n sample1.trimmed.nonfl_reads.fa \
-    -s sample1.summary.txt \
-    -t 32
+    -s sequencing_summary_FAQ85160_399ee876.txt \
+    -o ./output_sample1 \
+    -p sample1 \
+    -t 16 \
+    --trimA
 ```
 
 ```
 Usage: step2_consensus.py [OPTIONS]
 
 Options:
-  -i, --input TEXT       input trimmed fastq.  [required]
-  -c, --ccs TEXT         output full-length consensus reads.  [required]
-  -n, --non TEXT         output non full-length reads.  [required]
-  -s, --summary TEXT     consensus calling summary file.  [required]
-  -r, --adapter TEXT     Adapter sequences file. Defaults to an embedded PROFIT-seq adapter fasta.
-  -t, --threads INTEGER  number of threads.
-```
+  -i, --input PATH       input trimmed fastq.  [required]
+  -s, --summary PATH     input sequencing summary generate by MinKNOW.  [required]
+  -o, --outdir PATH      output directory.  [required]
+  -p, --prefix TEXT      output prefix name.  [required]
+  -r, --adapter PATH     Adapter sequences file. Defaults to embedded splint adapter sequences.
+  -t, --threads INTEGER  number of threads. Defaults to number of cpu cores.
+  --trimA                trim 3' poly(A) sequences
+``` 
 
-### 3.5 (Optional) Trim poly(A) sequences
+- The output `sample1.fl.fa` is the full-length consensus reads with both 5' and 3' primers.
+- The output `sample1.recovered.fa` is the partial fragents that only have one 5'/3' primer.
 
-Trim poly(A) tails for full-length consensus reads to increase alignment accuracy
+### 3.5 Isoform assembly & quantification
+
+Use full-length reads for full-length isoform assembly and quantification
 
 ```bash
-python scripts/step3_trim_polyA.py \
-    -i sample1.trimmed.fl_reads.fa \
-    -o sample1.trimmed.fl_reads.nopA.fa 
+python step3_analysis.py \
+    -i ./output_sample1 \
+    -p sample1 \
+    -r GRCh38.primary_assembly.genome.fa \
+    -a gencode.v37.annotation.gtf \
+    -t 16 \
+    --assemble \
+    --bed ../cancer_panel.bed
 ```
 
 ```
-Usage: step3_trim_polyA.py [OPTIONS]
+Usage: step3_analysis.py [OPTIONS]
 
 Options:
-  -i, --input TEXT       input full-length consensus reads.  [required]
-  -o, --output TEXT      output trimmed reads.  [required]
-```
+  -i, --workspace PATH   directory of step2_consensus.py output  [required]
+  -p, --prefix TEXT      sample prefix for step2_consensus.py  [required]
+  -r, --genome PATH      reference genome fasta.  [required]
+  -a, --gtf PATH         gene annotation gtf.  [required]
+  -b, --bed PATH         bed file for target regions.  [required]
+  -t, --threads INTEGER  number of threads. Defaults to number of cpu cores.
+  --assemble             perform transcript isoform assemble.
+  --help                 Show this message and exit.
+``` 
 
-### 3.6 Isoform assembly
-
-Use full-length reads for full-length isoform assembly with StringTie2
-
-```bash
-# Align to reference genome
-minimap2 -t 32 -a -x splice GRCh38.primary_assembly.genome.fa sample1.trimmed.fl_reads.nopA.fa  \
-    | samtools sort -@ 32 -o sample1.sorted.bam -
-samtools index -@ 32 sample1.sorted.bam
-
-# Full-length isoform assembly
-stringtie sample1.sorted.bam \
-    -p 32 -G gencode.v37.annotation.gtf \
-    -t -L -c 1.5 -s 1 -g 0 -f 0.05 \
-    -o sample1_out.gtf \
-    -A sample1_genes.list
-    
-# Annotated StringTie2 output
-gffcompare -o sample1_gencode -r gencode.v37.annotation.gtf sample1_out.gtf
-
-# Generate annotated isoform sequences
-gffread sample1_gencode.annotated.gtf -g GRCh38.primary_assembly.genome.fa -w sample1_gencode.annotated.fa
-```
-
-The output `sample1_gencode.annotated.fa` is the assembled and annotated full-length transcript isoform sequences.
-
-Detailed annotation information is in `sample1_gencode.annotated.gtf`
-
-### 3.7 Quantification
-
-PROFIT-seq uses a hybrid-quantification strategy to combine full-length consensus and non-fl fragments.
-
-**NOTE: If you do not want to perform transcript assembly, replace `sample1_gencode.annotated.fa` with the reference transcriptome fasta instead** 
-
-```bash
-# Full-length consensus reads
-minimap2 -ax map-ont -t 32 -p 1.0 -N 100 sample1_gencode.annotated.fa sample1.trimmed.fl_reads.nopA.fa \
-    | samtools sort -@ 32 -o sample1_transcripts.fl.sorted.bam -
-samtools index sample1_transcripts.fl.sorted.bam
-salmon quant --noErrorModel --noLengthCorrection -p 32 -l U \
-    -t sample1_gencode.annotated.fa -a sample1_transcripts.fl.sorted.bam \
-    -o output/fl_reads 
-    
-# Recover non-fl partial fragments 
-minimap2 -ax map-ont -t 32 -p 1.0 -N 100 sample1_gencode.annotated.fa sample1.trimmed.nonfl_reads.fa  \
-    | samtools sort -@ 32 -o sample1_transcripts.nonfl.sorted.bam -
-samtools index sample1_transcripts.nonfl.sorted.bam
-salmon quant --noErrorModel --noLengthCorrection -p 32 -l U \
-    -t sample1_gencode.annotated.fa -a sample1_transcripts.nonfl.sorted.bam \
-    -o output/nonfl_reads 
-```
-
-Integration of hybrid quantification results:
-
-```
-python scripts/step4_quantification.py \
-    --fl path/to/fl_reads/quant.sf \
-    --nonfl path/to/nonfl_reads/quant.sf \
-    --output merged.sf
-```
-
-```
-Usage: step4_quantification.py [OPTIONS]
-
-Options:
-  --fl TEXT              quant.sf for full-length reads.  [required]
-  --nonfl TEXT           quant.sf for non-fl reads.  [required]
-  --output TXT           output quantification result.  [required]
-```
-
-The final output contains four columns: transcript name, transcript length, CPM, number of reads
+- The output `sample1_isoforms.gtf` is the assembled and annotated full-length transcript isoforms in GTF format (requires `--assemble`).
+- The output `sample1_isoforms.transcripts.sf` is transcript-level quantification results in the Salmon tsv format. The output contains five columns: transcript name, transcript length, effective length, CPM, number of reads.
+- The output `sample1_isoforms.genes.sf` is gene-level quantification results. The output contains three columns: gene name, CPM, number of reads.

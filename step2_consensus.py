@@ -2,6 +2,7 @@
 import os
 import sys
 import click
+import pandas as pd
 import numpy as np
 from pathlib import Path 
 from multiprocessing import Lock
@@ -15,15 +16,14 @@ from pyccs import find_consensus
 
 from PROFIT_seq.logger import get_logger, ProgressBar
 from PROFIT_seq.seqIO import count_fastx, load_fastx, yield_fastx, revcomp, align_sequence
+from PROFIT_seq.utils import check_dir
 LOGGER = get_logger("PROFIT-seq", debugging=False)
 Columns = [
     'Read_id', "Read_type", 'Seq_len', 'Splint_hit', 'Segment_len',
     'Consensus_split', 'Consensus_splint_pos', 'Consensus_splint_type', 'Consensus_qc_tag', 'Strand_len',
-    'Primer3', 'Primer5', 'Primer_qc_tag', 'Cleaned_len'
+    'Primer3', 'Primer5', 'Primer_qc_tag', 'Cleaned_len', "Blacklist", "pA",
 ]
-FL_Output = None
-NonFL_output = None
-Summary_output = None
+FL_Output, NonFL_output = None, None
 Processed, Total = 0, 0
 FL_reads, NonFL_reads = 0, 0
 Prog = ProgressBar()
@@ -31,7 +31,7 @@ Prog = ProgressBar()
 
 def load_adapters(adapter_fa):
     """
-    Load RCA splint and 10x adapters
+    Load RCA splint and 10x adapter sequences
     """
     adapters = load_fastx(adapter_fa)
     for adapter_id in 'RCA_splint', '3prime_adapter', '5prime_adapter':
@@ -59,6 +59,7 @@ def _ret_callback(ret):
         for cleaned_seq, read_summary in ret:
             read_id = read_summary['Read_id'].split(' ')[0]
             tmp_line = [read_summary[col] if col in read_summary else "-" for col in Columns]
+            tmp_line[0] = read_id
             Summary_output.write("\t".join([str(x) for x in tmp_line]) + "\n")
 
             if cleaned_seq is not None:
@@ -74,7 +75,7 @@ def _ret_callback(ret):
         Prog.update(100 * Processed / Total, is_force=True)
 
 
-def split_and_clean(input_fa, splint, primer3, primer5, threads):
+def split_and_clean(input_fa, splint, primer3, primer5, blacklist, threads, trimA):
     """
     1. Re-order consensus sequence using RCA_splint
     2. Trim 10x 5'- and 3'- adapters
@@ -91,7 +92,7 @@ def split_and_clean(input_fa, splint, primer3, primer5, threads):
     for record in yield_fastx(input_fa):
         chunk.append(record)
         if len(chunk) >= chunk_size:
-            jobs.append(pool.apply_async(worker, (chunk, splint, primer3, primer5,),
+            jobs.append(pool.apply_async(worker, (chunk, splint, primer3, primer5, blacklist, trimA, ),
                                          callback=_ret_callback, error_callback=_err_callback, ))
             chunk = []
     pool.close()
@@ -101,7 +102,10 @@ def split_and_clean(input_fa, splint, primer3, primer5, threads):
     return 0
 
 
-def worker(chunk, splint, primer3, primer5):
+def worker(chunk, splint, primer3, primer5, blacklist, trimA):
+    """
+    Main worker process
+    """
     _splint = Adapter(splint, ssw.Aligner(splint, match=2, mismatch=4, gap_open=4, gap_extend=2))
     _primer3 = Adapter(primer3, ssw.Aligner(primer3, match=2, mismatch=4, gap_open=4, gap_extend=2))
     _primer5 = Adapter(primer5, ssw.Aligner(primer5, match=2, mismatch=4, gap_open=4, gap_extend=2))
@@ -111,6 +115,7 @@ def worker(chunk, splint, primer3, primer5):
         tmp_summary = {
             'Read_id': read_id,
             'Seq_len': len(seq),
+            'Blacklist': read_id in blacklist,
         }
 
         # Split by splint sequences
@@ -150,8 +155,22 @@ def worker(chunk, splint, primer3, primer5):
             tmp_summary["Strand_len"] = len(strand_seq)
             cleaned_seq, trim_summary = trim_strand_primer(strand_seq, primer3, primer5)
             tmp_summary.update(trim_summary)
+
+            if cleaned_seq is None:
+                tmp_summary['pA'] = None
+            else:
+                pA_st = find_polyA(cleaned_seq, 15, 10, 8)
+                if pA_st is None:
+                    tmp_summary['pA'] = False
+                else:
+                    tmp_summary['pA'] = True
+                    if trimA:
+                        cleaned_seq = cleaned_seq[:pA_st]
         else:
             tmp_summary['Strand_len'] = 0
+            cleaned_seq = None
+
+        if cleaned_seq is not None and len(cleaned_seq) == 0:
             cleaned_seq = None
 
         ret.append((cleaned_seq, tmp_summary))
@@ -160,6 +179,9 @@ def worker(chunk, splint, primer3, primer5):
 
 
 def split_by_splint(seq, splint, p_indel=0.1):
+    """
+    FInd splint sequence
+    """
     for_aln = splint.aligner.align(seq)
     rev_aln = splint.aligner.align(revcomp(seq))
     strand_seq = revcomp(seq) if for_aln.score < rev_aln.score else seq
@@ -195,6 +217,9 @@ def split_by_splint(seq, splint, p_indel=0.1):
 
 
 def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=True):
+    """
+    Align splint sequences
+    """
     if strand_seq is None:
         return []
 
@@ -237,6 +262,9 @@ def recursive_aln_splint(strand_seq, splint, shift=0, st_align=True, en_align=Tr
 
 
 def rearrange_by_splint(strand_seq, splint):
+    """
+    Re arrange consensus sequence by splint position
+    """
     tmp_summary = {}
     seq_len = len(strand_seq)
     pseudo_aligner = ssw.Aligner(strand_seq*2, match=2, mismatch=4, gap_open=4, gap_extend=2)
@@ -270,6 +298,9 @@ def rearrange_by_splint(strand_seq, splint):
 
 
 def trim_strand_primer(strand_seq, primer3, primer5):
+    """
+    Detect 3' and 5' primer
+    """
     tmp_summary = {}
     # Trimmed adapters
     strand_aligner = ssw.Aligner(strand_seq, match=1, mismatch=1, gap_open=1, gap_extend=1,)
@@ -326,20 +357,60 @@ def trim_strand_primer(strand_seq, primer3, primer5):
 #     return dict(Counter(failed_reasons))
 
 
+def load_sequencing_summary(summary_file):
+    """
+    Load blacklist of unblock reads from sequencing summary
+    """
+    df = pd.read_csv(summary_file, sep="\t", index_col=2, low_memory=False)
+    blacklist = df.index[df['end_reason'].map(lambda x: "unblock_mux_change" in x)]
+    return set(blacklist)
+
+
+def find_polyA(seq, tail_len=30, k=10, max_A=8):
+    """
+    Find polyA position in input sequence
+    """
+    from collections import Counter
+    if len(seq) == 0:
+        return None
+
+    pos_A = []
+    scan_en = max(len(seq) - k, 0)
+    scan_st = max(len(seq) - tail_len, 0)
+    for i in range(scan_st, scan_en):
+        if Counter(seq[i:i + k])["A"] >= max_A:
+            pos_A.append(i)
+
+    x = scan_st
+    while Counter(seq[x:x + k])["A"] >= max_A:
+        pos_A.append(x)
+        x -= 1
+
+    if len(pos_A) == 0:
+        return None
+
+    st_A = min(pos_A)
+    while seq[st_A] != "A":
+        st_A += 1
+
+    return st_A
+
+
 @click.command()
-@click.option('--input', '-i', type=str, required=True,
-              help='input trimmed fastq.')
-@click.option('--ccs', '-c', type=str, required=True,
-              help='output full-length consensus reads.')
-@click.option('--non', '-n', type=str, required=True,
-              help='output non full-length reads.')
-@click.option('--summary', '-s', type=str, required=True,
-              help='consensus calling summary file.')
-@click.option('--adapter', '-r', type=str, default=Path(os.path.realpath(__file__)).parent / 'RCA_adapters.fa',
-              help='Adapter sequences file.')
+@click.option('--input', '-i', type=Path, required=True,
+              help='input porechop trimmed fastq.')
+@click.option('--summary', '-s', type=Path, required=True,
+              help='input sequencing summary generate by MinKNOW.')
+@click.option('--adapter', '-r', type=Path, default=Path(os.path.realpath(__file__)).parent / 'RCA_adapters.fa',
+              help='Adapter sequences file. Defaults to embedded splint adapter sequences.')
+@click.option('--outdir', '-o', type=Path, required=True,
+              help='output directory name.')
+@click.option('--prefix', '-p', type=str, required=True,
+              help='output prefix name.')
 @click.option('--threads', '-t', type=int, default=os.cpu_count(),
-              help='number of threads.')            
-def main(adapter, input, ccs, non, summary, threads):
+              help='number of threads. Defaults to number of cpu cores.')
+@click.option('--trimA', is_flag=True, help="trim 3' poly(A) sequences")
+def main(input, summary, adapter, outdir, prefix, threads, trima):
     global Total, FL_Output, NonFL_output, Summary_output
 
     # Run function
@@ -347,28 +418,39 @@ def main(adapter, input, ccs, non, summary, threads):
         LOGGER.setLevel(10)
         for handler in LOGGER.handlers:
             handler.setLevel(10)
-
     LOGGER.info('Processing consensus reads with {} threads'.format(threads))
+
+    LOGGER.info('Loading sequencing summary')
+    blacklist = load_sequencing_summary(summary)
 
     # Load adapter
     splint, primer3, primer5 = load_adapters(adapter)
 
-    FL_Output = open(ccs, 'w')
-    NonFL_output = open(non, 'w')
-    Summary_output = open(summary, 'w')
+    # Open output files
+    outdir = check_dir(outdir)
+    fl_fa = outdir / f"{prefix}.fl.fa"
+    partial_fa = outdir / f"{prefix}.recovered.fa"
+    summary_txt = outdir / f"{prefix}.consensus_summary.txt"
 
+    FL_Output = open(fl_fa, 'w')
+    NonFL_output = open(partial_fa, 'w')
+    Summary_output = open(summary_txt, 'w')
+    Summary_output.write('\t'.join(Columns) + '\n')
+
+    # Count total reads number
     Total = count_fastx(input)
     LOGGER.info(f"Total {Total} reads")
 
     # Trim adapters
-    status = split_and_clean(input, splint, primer3, primer5, threads)
-
-    FL_Output.close()
-    NonFL_output.close()
-    Summary_output.close()
+    status = split_and_clean(input, splint, primer3, primer5, blacklist, threads, trima)
 
     LOGGER.info(f"Processed {FL_reads}/{NonFL_reads}/{Total} ({100*(FL_reads+NonFL_reads)/Total:.2f}% cleaned) reads")
     LOGGER.info(f"Finished!")
+    
+    # Cleaning up
+    FL_Output.close()
+    NonFL_output.close()
+    Summary_output.close()
 
 
 if __name__ == '__main__':

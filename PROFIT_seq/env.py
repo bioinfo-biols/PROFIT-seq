@@ -116,14 +116,14 @@ def split_segments(segments, is_closed=False):
 
 
 def get_jobs():
-    time_sections = [job['time'] for job in env.Jobs]
+    time_sections = [job['time'] for job in Jobs]
     time_nodes, time_d = split_segments(time_sections, False)
 
-    ch_sections = [job['ch'] for job in env.Jobs]
+    ch_sections = [job['ch'] for job in Jobs]
     ch_nodes, ch_d = split_segments(ch_sections, True)
 
     job_mtx = defaultdict(dict)
-    for job in env.Jobs:
+    for job in Jobs:
         for i in time_d[job['time']]:
             for j in ch_d[job['ch']]:
                 job_mtx[i].setdefault(j, []).append(job)
