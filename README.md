@@ -16,7 +16,7 @@ Maintainer: Jinyang Zhang
 
 The code is released under the MIT License. See the LICENSE file for more detail
 
-## Citing CIRI-long
+## Citing PROFIT-seq
 
 Under submission
 
