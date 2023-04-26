@@ -10,7 +10,8 @@ from pyguppy_client_lib.pyclient import PyGuppyClient
 from minknow_api.acquisition_pb2 import MinknowStatus
 
 from PROFIT_seq import env
-from PROFIT_seq.utils import Severity, send_message, basecall, get_jobs
+from PROFIT_seq.env import get_jobs
+from PROFIT_seq.utils import Severity, send_message, basecall
 Logger = getLogger("PROFIT_seq")
 
 
