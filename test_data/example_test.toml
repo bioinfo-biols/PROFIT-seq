@@ -1,0 +1,9 @@
+[[jobs]]
+name = "Test timing"
+time = [0, 240]
+ch = [1, 512]
+bc = "all"
+target = [
+  {region = "mapped", action = "unblock"},
+  {region = "unmapped", action="unblock"},
+]

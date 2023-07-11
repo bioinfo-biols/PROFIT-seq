@@ -1,0 +1,8 @@
+[[jobs]]
+name = "Unblock all"
+time = [0, 240]
+ch = [1, 512]
+bc = "all"
+target = [
+  {region = "all", action="unblock"},
+]

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>DashION: Programmable Sequencing</title>
+
+    <link rel="icon" href="{{ url_for('static', filename='img/server-solid.svg') }}" />
+
+    <!-- Custom fonts for this template-->
+    <link href="{{ url_for('static', filename='vendor/fontawesome-free/css/all.css') }} " rel="stylesheet" type="text/css">
+    <link href="{{ url_for('static', filename='vendor/google-webfonts/css/nunito.css') }} " rel="stylesheet" type="text/css">
+    <link href="{{ url_for('static', filename='css/sb-admin-2.min.css') }}" rel="stylesheet">
+    
+</head>
+
+<body id="page-top">
+
+    <!-- Page Wrapper -->
+    <div id="wrapper">
+
+        <!-- Sidebar -->
+        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion toggled" id="accordionSidebar">
+
+            <!-- Sidebar - Brand -->
+            <a class="sidebar-brand d-flex align-items-center justify-content-center" href="#">
+                <div class="sidebar-brand-icon rotate-n-0">
+                    <i class="fas fa-fw fa-server"></i>
+                </div>
+            </a>
+        </ul>
+        <!-- End of Sidebar -->
+
+        <!-- Content Wrapper -->
+        <div id="content-wrapper" class="d-flex flex-column">
+
+            <!-- Main Content -->
+            <div id="content">
+
+                <!-- Topbar -->
+                <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+                    <div class="sidebar-brand-text mx-3">DashION: Programmable nanopore sequencing</div>
+                    <!-- Topbar Navbar -->
+                    <ul class="navbar-nav ml-auto">
+
+                        <div class="topbar-divider d-none d-sm-block"></div>
+
+                        <!-- Nav Item - Device Information -->
+                        <li class="nav-item dropdown no-arrow">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                                data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <span class="mr-2 d-none d-lg-inline text-gray-600 small">{{ hostname }} / {{ local_ip }}</span>
+                                <i class="fas fa-fw fa-desktop"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+                <!-- End of Topbar -->
+
+                <!-- Begin Page Content -->
+                <div class="container-fluid">
+
+                    <!-- Page Heading -->
+                    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+                        <h1 class="h3 mb-0 text-gray-800">Programmable sequencing control</h1>
+                        <a id="refreshBtn" class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm"><i
+                            class="fas fa-rotate fa-sm fa-fw text-white-100"></i>Refresh</a>
+                    </div>
+
+                    <!-- Content Row -->
+                    <div class="row">
+
+                        <!-- Unblock Card-->
+                        <div class="col-lg-4 mb-4">
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary">Unblock Jobs</h6>
+                                </div>
+
+                                <div class="card-body">
+
+                                    <!-- Job parameters -->
+                                    <form id="jobForm" class="user" method="post" enctype="multipart/form-data">
+
+                                        <p><b>Add primitive jobs manually</b></p>
+
+                                        <!-- Action -->
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6 mb-6">
+                                                <label for="unblockMode">Job Mode</label>
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#unblockModeModal"></i>
+
+                                                <!-- Modal -->
+                                                <div class="modal fade" id="unblockModeModal" tabindex="-1" role="dialog" aria-labelledby="unblockModeModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="unblockModModalLabel">Unblock Mode</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <b>Unblock</b>: Unblock strands aligned to the target region.<br><br>
+                                                            <b>Enrich</b>: Unblock strands that not aligned to the target region.<br><br>
+                                                            <b>Balance</b>: Balance coverage of target regions. (Not available)<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </div>
+
+                                                <select id="unblockMode" name="unblockMode" class="form-control">
+                                                    <option selected>unblock</option>
+                                                    <option>stop_receiving</option>
+                                                    <option>balance</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group col-md-6 mb-6">
+                                                <label for="jobName">Job Name</label>
+                                                <input type="text" class="form-control" id="jobName" name="jobName" placeholder="Job Name" value="Job Name">
+                                            </div>
+                                        </div>
+
+                                        <!-- Time and Channel control-->
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="startTime">Start Time (min)</label>
+                                                <input type="text" class="form-control" id="startTime" name="startTime" placeholder="0" value="0">
+                                            </div>
+
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="duration">Duration (min)</label>
+                                                <input type="text" class="form-control" id="duration" name="duration" placeholder="4320" value="4320">
+                                            </div>
+
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="startTime">Start Channel</label>
+                                                <input type="text" class="form-control" id="startChannel" name="startChannel" placeholder="1" value="1">
+                                            </div>
+
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="duration">End Channel</label>
+                                                <input type="text" class="form-control" id="endChannel" name="endChannel" placeholder="512" value="512">
+                                            </div>
+                                        </div>
+
+                                        <div class="form-row">
+                                            <div class="form-group col-md-12 mb-3">
+                                                <label for="barcode">Barcodes (split by comma)</label>
+
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#bcModal"></i>
+
+                                                <!-- Modal -->
+                                                <div class="modal fade" id="bcModal" tabindex="-1" role="dialog" aria-labelledby="bcModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="bcModalLabel">Barcodes</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <b>"None":</b><br>apply action to all reads with/without barcodes<br><br>
+                                                            <b>"All":</b><br>apply action to all reads with successfully assigned barcodes<br><br>
+                                                            <b>Barcodes (split by comma):</b><br>apply action to reads with specific barcodes<br><br>
+                                                            <b>"Unclassified":</b><br>apply action only to unclassified reads<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </div>
+
+                                                <input type="text" class="form-control" id="barcode" name="barcode" placeholder="barcode01,barcode02" value="barcode01,barcode02">
+                                            </div>
+                                        </div>
+
+                                        <div class="form-row">
+                                            <div class="form-group col-md-12 mb-3">
+                                                <label for="target">Target region</label>
+
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#tgModal"></i>
+
+                                                <!-- Modal -->
+                                                <div class="modal fade" id="tgModal" tabindex="-1" role="dialog" aria-labelledby="tgModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="tgModalLabel">Target region</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                        <b>chr:start-end</b><br>apply action to reads aligned to target region<br><br>
+                                                        <b>chr</b><br>apply action to reads aligned to target chromosome<br><br>
+                                                        <b>"Mapped"</b><br>apply action to reads aligned to reference transcriptome<br><br>
+                                                        <b>"Unmapped"</b><br>apply action to unmapped reads<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </div>
+
+                                                <input type="text" class="form-control" id="target" name="target" placeholder="chr1:1000-2000" value="chr1:1000-2000">
+                                            </div>
+                                        </div>
+
+                                        <label><b>Or upload your program in JSON format</b></label>
+
+                                        <i class="fas fa-circle-question" data-toggle="modal" data-target="#batchModal"></i>
+
+                                        <!-- Modal -->
+                                        <div class="modal fade" id="batchModal" tabindex="-1" role="dialog" aria-labelledby="batchModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog" role="document">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                <h5 class="modal-title" id="batchModalLabel">Jobs batch upload (only support JSON format)</h5>
+                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <b>Example:</b><br><br>
+                                                    <pre>
+{
+    "time|0-60": {
+        "ch|0-128": {
+            "bc|all": {
+                "target|chrM": "Enrich",
+                "target|chr21": "Unblock",
+            }
+        },
+        "ch|128-256": {
+            "bc|all": {
+                target|/tmp/config/targets.bed": "Unblock"
+            }
+        }
+    }
+}
+                                                    </pre>
+
+                                                </div>
+                                                <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-row">
+                                            <div class="custom-file col-md-12 mb-3">
+                                                <input onchange="showFileName(this.files[0])" type="file" class="custom-file-input" id="jobFile" name="jobFile">
+                                                <label id="filename_label" class="custom-file-label" for="jobFile">Upload jobs</label>
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary">Submit</button>
+
+                                    </form>
+
+                                </div>
+                            </div>
+
+                        </div>
+                        <!-- Content Column -->
+                        <div class="col-lg-8 mb-4">
+
+                            <!-- Run status card -->
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                                    <h6 class="m-0 font-weight-bold text-primary">Run time</h6>
+                                    <a href="#" id="runBtn" class="d-none d-sm-inline-block btn btn-sm btn-success shadow-sm"><i
+                                        id="run-icon" class="fas fa-play fa-fw fa-sm text-white-50"></i> <span
+                                        id="run-text"> Start Unblock</span> </a>
+                                </div>
+                                <div class="card-body">
+                                    <h4 class="small font-weight-bold"><span id="device-text">{{ device }}</span> <span
+                                            id="sample-text" class="float-right" >NA</span></h4>
+                                    <div class="progress mb-4">
+                                        <div id="expProgBar" class="progress-bar bg-secondary" role="progressbar" style="width: 100%"
+                                            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <h4 class="small font-weight-bold" id="duration-text">Run / Experiment time</h4>
+                                </div>
+                            </div>
+
+                            <!-- Job Illustrations -->
+                            <div class="card shadow mb-4">
+                                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                                    <h6 class="m-0 font-weight-bold text-primary">Monitoring Jobs</h6>
+                                    <a data-toggle="modal" data-target="#clearModal" class="d-none d-sm-inline-block btn btn-sm btn-danger shadow-sm"><i
+                                        id="clear-icon" class="fas fa-regular fa-circle-exclamation fa-fw fa-sm text-white-50"></i> <span
+                                        id="clear-text"> Clear All Jobs</span> </a>
+
+                                        <!-- Modal -->
+                                        <div class="modal fade" id="clearModal" tabindex="-1" role="dialog" aria-labelledby="bcModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog" role="document">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                <h5 class="modal-title" id="clearModalLabel">ATTENTION</h5>
+                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">&times;</span>
+                                                </button>
+                                                </div>
+                                                <div class="modal-body">
+                                                <b>All jobs will be cleared</b><br>
+                                                </div>
+                                                <div class="modal-footer">
+                                                <button id="clearBtn" type="button" class="btn btn-danger" data-dismiss="modal">Proceed</button>
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                </div>
+                                            </div>
+                                            </div>
+                                        </div>
+
+                                </div>
+                                <div class="card-body">
+                                    <div class="chart-area">
+                                        <div id="monitor" class="chart" style="resize:both; height:100%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- /.container-fluid -->
+
+            </div>
+            <!-- End of Main Content -->
+
+            <!-- Footer -->
+            <footer class="sticky-footer bg-white">
+                <div class="container my-auto">
+                    <div class="copyright text-center my-auto">
+                        <span>Copyright &copy; DashION 2022</span>
+                    </div>
+                </div>
+            </footer>
+            <!-- End of Footer -->
+
+        </div>
+        <!-- End of Content Wrapper -->
+
+    </div>
+    <!-- End of Page Wrapper -->
+
+    <!-- Scroll to Top Button-->
+    <a class="scroll-to-top rounded" href="#page-top">
+        <i class="fas fa-angle-up"></i>
+    </a>
+
+    <!-- Bootstrap core JavaScript-->
+    <script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }} "></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }} "></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap-slider/bootstrap-slider.min.js') }} "></script>
+
+    <!-- Core plugin JavaScript-->
+    <script src="{{ url_for('static', filename='vendor/jquery-easing/jquery.easing.min.js') }} "></script>
+
+    <!-- Custom scripts for all pages-->
+    <script src="{{ url_for('static', filename='js/sb-admin-2.min.js') }} "></script>
+
+    <!-- Page level plugins -->
+    <script src="{{ url_for('static', filename='vendor/chart.js/Chart.min.js') }} "></script>
+
+    <!-- Page level custom scripts -->
+    <script src="{{ url_for('static', filename='js/demo/chart-area-demo.js') }} "></script>
+    <script src="{{ url_for('static', filename='js/demo/chart-pie-demo.js') }} "></script>
+
+    <!-- Plotly & D3 -->
+    <script src="{{ url_for('static', filename='vendor/plotly/plotly-latest.min.js') }} "></script>
+    <script src="{{ url_for('static', filename='vendor/d3/d3.min.js') }} "></script>
+
+    <!-- Run unblock -->
+    <script type=text/javascript>
+        var $progItv, $plotItv;
+        var
+            $refreshBtn = $('#refreshBtn'),
+            $jobForm = $('#jobForm'),
+            $runBtn = $('#runBtn'),
+            $runIcon = $("#run-icon"),
+            $runText = $("#run-text"),
+            $expProgBar = $("#expProgBar"),
+            $durationText = $("#duration-text"),
+            $deviceText = $("#device-text"),
+            $sampleText = $("#sample-text"),
+            $clearBtn = $("#clearBtn");
+        var
+            $runIconTemp = "fas fa-fw fa-sm text-white-50 ",
+            $runBtnTemp = "d-none d-sm-inline-block btn btn-sm shadow-sm ",
+            $expProgBarTemp = "progress-bar ";
+
+        // Update job status
+        function updateProgressBar() {
+            $.getJSON('/prog', function (res) {
+                $expProgBar.css('width', res.progNumber + '%');
+                $expProgBar.css('text-align', 'center');
+                $durationText.text(res.progText);
+                $deviceText.html(res.deviceText);
+                $sampleText.html(res.sampleText);
+                if (res.runStatus === 'Ready') {
+                    // Ready for sequencing
+                    $runIcon.attr("class", $runIconTemp + "fa-play");
+                    $runBtn.attr("class", $runBtnTemp + "btn-success");
+                    $runText.html('Start Unblock');
+                    $expProgBar.attr("class", $expProgBarTemp + "bg-secondary");
+                    clearInterval($progItv);
+                } else if ((res.runStatus === 'Waiting') | (res.runStatus === 'Running')) {
+                    // Waiting for experiments
+                    $runIcon.attr("class", $runIconTemp + "fa-stop");
+                    $runBtn.attr("class", $runBtnTemp + "btn-danger");
+                    $runText.html('Stop Unblock');
+                    $expProgBar.attr("class", $expProgBarTemp + "bg-success");
+                } else if (res.runStatus === 'Finished') {
+                    // Job finished
+                    $runIcon.attr("class", $runIconTemp + "fa-check");
+                    $runBtn.attr("class", $runBtnTemp + "btn-secondary");
+                    $runText.html('Finished Unblock');
+                    $expProgBar.attr("class", $expProgBarTemp + "bg-info");
+                    clearInterval($progItv);
+                } else if (res.runStatus === 'Stopped') {
+                    // Job stopped
+                    $runIcon.attr("class", $runIconTemp + "fa-check");
+                    $runBtn.attr("class", $runBtnTemp + "btn-secondary");
+                    $runText.html('Stopped Unblock');
+                    $expProgBar.attr("class", $expProgBarTemp + "bg-info");
+                    clearInterval($progItv);
+                }
+            });
+        }
+
+        // Monitor job status
+        function monitorProgress () {
+            $progItv = setInterval(updateProgressBar, 1000);
+        }
+
+        // Create job plot
+        function createPlot() {
+            $.ajax({
+                url: '/plot',
+                data: "None",
+                type: "POST",
+            })
+            .done(function(res) {
+                var graphs = JSON.parse(res.graph);
+                var layout = {
+                  title: 'Responsive to window\'s size!',
+                  font: {size: 18}
+                };
+
+                graphs.config = {
+                    'displaylogo': false,
+                    'responsive': true,
+                    'scrollZoom': true,
+                    'displayModeBar': false,
+                };
+                Plotly.newPlot('monitor', graphs, layout);
+            })
+            .fail(function(){console.log("Failed to update plot")});
+        }
+
+        // Update job plot
+        function updatePlot() {
+            $.ajax({
+                url: '/plot',
+                data: "None",
+                type: "POST",
+            })
+                .done(function (res) {
+                    $('#monitor').fadeOut(500).fadeIn(500);
+                    var graphs = JSON.parse(res.graph);
+                    Plotly.react('monitor', graphs, {});
+
+                    if ( (res.runStatus === 'Ready' | res.runStatus === 'Finished') | (res.runStatus === 'Stopped') ) {
+                        clearInterval($plotItv);
+                    };
+                })
+                .fail(function () {
+                    console.log("Failed to update plot")
+                });
+        };
+
+        // Monitor plot
+        function monitorPlot() {
+            $plotItv = setInterval(updatePlot, 30000);
+        }
+
+        // Start jobs
+        function startJob() {
+            $.getJSON('/run', function(data) {});
+        }
+
+        // Stop jobs
+        function stopJob () {
+            $.getJSON('/stop', function(data) {});
+        };
+
+        // Windows onload
+        window.onload = function (){
+            updateProgressBar();
+            createPlot();
+        }
+
+        // Refresh status
+        $refreshBtn.on('click', function(e) {
+            e.preventDefault();
+            updatePlot();
+            updateProgressBar();
+            clearInterval($progItv);
+            clearInterval($plotItv);
+            monitorPlot();
+            monitorProgress();
+        });
+
+        // Submit jobs
+        $jobForm.submit(function(e) {
+            e.preventDefault();
+            // var actionUrl = $jobForm.attr('action');
+            var form_data = new FormData($jobForm[0]);
+            $.ajax({
+                type: "POST",
+                url: '/submit',
+                data: form_data,
+                contentType: false,
+                cache: false,
+                processData: false,
+                success: function(data)
+                {
+                    console.log(data);
+                    updatePlot();
+                },
+                error: function(data) {
+                    console.log(data);
+                }
+            });
+            $jobForm.trigger("reset");
+            $("#jobFile").value = "";
+            $("#filename_label").html("Upload jobs");
+        });
+
+        // Start / Stop / Inspect job
+        $runBtn.on('click', function(e) {
+            e.preventDefault();
+            if ( $runIcon.hasClass('fa-play') ) {
+                startJob();
+                clearInterval($progItv);
+                clearInterval($plotItv);
+                monitorPlot();
+                monitorProgress();
+            } else if ( $runIcon.hasClass('fa-stop') ) {
+                stopJob();
+                clearInterval($progItv);
+                clearInterval($plotItv);
+                monitorProgress();
+                monitorPlot();
+            } else if ( $runIcon.hasClass('fa-check') ) {
+                // Pass
+            };
+        });
+
+        // Update file name
+        function showFileName(file){
+            $("#filename_label").html(file.name);
+        }
+
+        // Clear jobs
+        $clearBtn.on('click', function(e) {
+            e.preventDefault();
+            $.getJSON('/clear', function(data) {});
+            updatePlot();
+        });
+    </script>
+
+</body>
+
+</html>
