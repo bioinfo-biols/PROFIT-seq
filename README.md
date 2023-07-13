@@ -22,72 +22,6 @@ Under submission
 
 # Documentation
 
-## 1. Installation
-
-### 1.1 Install MinKNOW and corresponding gpu version of ont-guppy from the [Nanopore community](https://community.nanoporetech.com/downloads)
-
-**NOTE: A valid ONT customer account is needed to download the MinKNOW and guppy software.** 
-
-### 1.2 Replace embedded cpu version of guppy in MinKNOW to the gpu version  
-
-Use gpu version of guppy in `/etc/systemd/system/guppyd.service`
-
-``` 
-service guppyd stop
-# Modify guppyd service to use ont-guppy-gpu and dna_r9.4.1_450bps_fast.cfg 
-systemctl daemon-reload
-service guppyd start
-```
-
-Change the following settings in `/opt/ont/minknow/conf/package/sequencing/sequencing_MIN106_DNA.toml`
-
-```
-[analysis_configuration.read_detection]
-break_reads_after_seconds = 0.4
-```
-
-### 1.3 Create password for the minknow user, and install python3 using system package manager of anaconda
-
-**NOTE: you need to run PROFIT-seq as user `minknow` to access the guppy and MinKNOW server correctly.** 
-
-### 1.4 Install PROFIT-seq
-
-- Log in into user `minknow`
-
-```bash
-ssh minknow@localhost
-```
-
-- Clone this repository to your computer
-
-```bash
-cd /opt
-git clone --recursive https://github.com/bioinfo-biols/PROFIT-seq.git
-cd PROFIT-seq
-```
-
-- Create a virtual environment for running these scripts
-
-- **NOTE: please use python 3.8.10**
-
-```bash
-virtualenv venv
-source ./venv/bin/activate
-```
-
-- Install requirements & the corresponding version of `ont-pyguppy-client-lib`
-
-```bash
-pip install -r requirements.txt
-pip install ont-pyguppy-client-lib==5.1.15
-```
-
-Note: if you only want to perform PROFIT-seq analysis (e.g. run PROFIT-seq using HPC), use step0_requirements.txt instead
-
-```bash
-make lib
-```
-
 ## 2. Usage
 
 ### 2.1 Connect the MinION device and insert the configuration test / FLO-MIN106D flow cell correctly
@@ -99,7 +33,7 @@ Open the MinKNOW software to make sure flow cell have been successfully recogniz
 - Run PROFIT-seq from `minknow` user
 
 ```bash
-ssh minknow@localhost
+sudo su - minknow
 cd /opt/PROFIT-seq && source venv/bin/activate
 python3 PROFIT-seq.py --mm_idx path_to_genome.mmi
 ```
@@ -204,12 +138,19 @@ Dependencies:
 
 ```bash
 # e.g.
-/opt/ont-guppy_5.1.15/bin/guppy_basecall_client \
+sudo su - minknow
+/opt/ont/guppy/bin/guppy_basecall_client \
     -r --input_path path_to_input --save_path path_to_output \
-    -c dna_r9.4.1_450bps_hac.cfg -x auto \
+    -c dna_r9.4.1_450bps_hac.cfg \
     --port ///tmp/.guppy/5555 \
     --barcode_kits "EXP-NBD114" \
     --compress_fastq
+
+/opt/ont/guppy/bin/guppy_barcoder \
+    -i path_to_output/pass \
+    -s path_to_output/barcoded \
+    --compress_fastq \
+    --disable_pings
 ```
 
 ### 3.2 Demultiplex reads acording to channel number
