@@ -70,7 +70,8 @@ def start_unblock():
             'unblock_file': Path(run_info.output_path) / 'unblock_reads.txt',
             'log_file': Path(run_info.output_path) / 'unblock_log.txt',
             'channel_count': run_info.flow_cell.channel_count,
-            'experiment_time': param['experiment_time'],
+            #'experiment_time': param['experiment_time'],
+            'experiment_time': 72,
             'barcoding_kits': [i.strip("'\"[]") for i in param['barcoding_kits'].split(',')] if 'barcoding_kits' in param else [],
         })
         env.ProtocolRun['lock_file'].write_text('0')
