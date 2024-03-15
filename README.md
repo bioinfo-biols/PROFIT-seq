@@ -22,4 +22,4 @@ Under submission
 
 # Documentation
 
-Please refer to the [wiki](https://bioinfo.biols.ac.cn/git/zhangjy/PROFIT-seq/wiki/_pages) for detailed usage
+Please refer to the [wiki](https://github.com/bioinfo-biols/PROFIT-seq/wiki) for detailed usage
