@@ -33,6 +33,9 @@ def start_unblock():
 
         # Merge unblock jobs
         time_nodes, ch_nodes, job_mtx = get_jobs()
+        Logger.debug(time_nodes)
+        Logger.debug(ch_nodes)
+        Logger.debug(job_mtx)
 
         env.Worker['status'] = 'Waiting'
         env.Worker['message'] = 'Waiting for connection'
@@ -68,6 +71,7 @@ def start_unblock():
             'run_dir': run_info.output_path,
             'lock_file': Path(run_info.output_path) / 'fusion.lock',
             'unblock_file': Path(run_info.output_path) / 'unblock_reads.txt',
+            'seq_file': Path(run_info.output_path) / 'unblock_reads.fa',
             'log_file': Path(run_info.output_path) / 'unblock_log.txt',
             'channel_count': run_info.flow_cell.channel_count,
             #'experiment_time': param['experiment_time'],
@@ -77,11 +81,12 @@ def start_unblock():
         env.ProtocolRun['lock_file'].write_text('0')
         env.ProtocolRun['unblock_fh'] = open(env.ProtocolRun['unblock_file'], 'a')
         env.ProtocolRun['log_fh'] = open(env.ProtocolRun['log_file'], 'a')
+        env.ProtocolRun['seq_fh'] = open(env.ProtocolRun['seq_file'], 'a')
         if env.ProtocolRun['unblock_file'].stat().st_size == 0:
             env.ProtocolRun['unblock_fh'].write('\t'.join(env.Unblock_header) + '\n')
         if env.ProtocolRun['log_file'].stat().st_size == 0:
             env.ProtocolRun['log_fh'].write('\t'.join(env.Log_header) + '\n')
-
+            
         Logger.info(
             f'Device: %s, Flow cell (%s): %s, Experiment: %s, Sample: %s',
             env.ProtocolRun['device_id'], env.ProtocolRun['product'], env.ProtocolRun['flow_cell'],
@@ -114,6 +119,7 @@ def start_unblock():
         env.ProtocolRun['lock_file'].unlink()
         env.ProtocolRun['unblock_fh'].close()
         env.ProtocolRun['log_fh'].close()
+        env.ProtocolRun['seq_fh'].close()
         env.Client.reset()
         env.Caller.disconnect()
         Logger.info("Finished")
@@ -166,6 +172,7 @@ def run_unblock(time_nodes, ch_nodes, job_mtx, throttle=0.4, retry_interval=10, 
         tmp_blacklist = []
         tmp_whitelist = []
         tmp_waitlist = []
+        tmp_seq = []
         batch_lines = []
         n_black, n_white, n_wait = 0, 0, 0
 
@@ -173,17 +180,19 @@ def run_unblock(time_nodes, ch_nodes, job_mtx, throttle=0.4, retry_interval=10, 
         _t = [x for x, (p, q) in enumerate(time_nodes) if p < ctime <= q]
         t_align = 0
         for (channel, read_number), read in called_batch:
+            read_id = read[0]['metadata']['read_id']
+            read_bc = read[0]['metadata']['barcode_arrangement']
+            read_seq = read[0]['datasets']['sequence']
+            tmp_seq.append([read_id, read_seq])
+
             # Filter using time and channel number
             _ch = [x for x, (p, q) in enumerate(ch_nodes) if p < channel <= q]
             if len(_t) == 0 or len(_ch) == 0:
                 tmp_whitelist.append((channel, read_number))
                 continue
-
             assert len(_t) == 1 and len(_ch) == 1
 
-            read_id = read[0]['metadata']['read_id']
-            read_bc = read[0]['metadata']['barcode_arrangement']
-            read_seq = read[0]['datasets']['sequence']
+            # Cached reads
             if read_id in env.Sequence:
                 read_seq = env.Sequence[read_id] + read_seq
 
@@ -229,6 +238,11 @@ def run_unblock(time_nodes, ch_nodes, job_mtx, throttle=0.4, retry_interval=10, 
         if batch_lines:
             for tmp_line in batch_lines:
                 env.ProtocolRun['unblock_fh'].write('\t'.join([str(x) for x in tmp_line]) + '\n')
+        
+        if tmp_seq:
+            for x,y in tmp_seq:
+                env.ProtocolRun['seq_fh'].write(f">{x}\n{y}\n")
+
         t4 = time.time()
 
         # Wait till throttle
@@ -321,13 +335,16 @@ def anubis(read_id, read_seq, read_bc, jobs):
     for hit in hits:
         contig, st, en = hit.ctg, hit.r_st, hit.r_en
         if contig in job['index']:
-            for r_st, r_en, action in job['index'][contig]:
-                if r_en < st:
-                    continue
-                elif en < r_st:
-                    break
-                else:
-                    actions_[action].append(f"{contig}:{r_st}-{r_en}")
+            if isinstance(job['index'][contig], str):
+                actions_[job['index'][contig]].append(f"{contig}:-")
+            else:
+                for r_st, r_en, action in job['index'][contig]:
+                    if r_en < st:
+                        continue
+                    elif en < r_st:
+                        break
+                    else:
+                        actions_[action].append(f"{contig}:{r_st}-{r_en}")
 
     if len(actions_) == 0:
         return job['index']['miss'], "miss", hits, t1-t0

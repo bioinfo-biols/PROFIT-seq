@@ -45,7 +45,7 @@
 
                 <!-- Topbar -->
                 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
-                    <div class="sidebar-brand-text mx-3">DashION: Programmable nanopore sequencing</div>
+                    <div class="sidebar-brand-text mx-3">PROFIT-seq: PROgrammable Full-length Isoform Transcriptome SEQuencing</div>
                     <!-- Topbar Navbar -->
                     <ul class="navbar-nav ml-auto">
 
@@ -68,7 +68,7 @@
 
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                        <h1 class="h3 mb-0 text-gray-800">Programmable sequencing control panel</h1>
+                        <h1 class="h3 mb-0 text-gray-800">Adaptive sampling control panel</h1>
                         <a id="refreshBtn" class="d-none d-sm-inline-block btn btn-sm btn-info shadow-sm"><i
                             class="fas fa-rotate fa-sm fa-fw text-white-100"></i>Refresh</a>
                     </div>
@@ -80,7 +80,7 @@
                         <div class="col-lg-4 mb-4">
                             <div class="card shadow mb-4">
                                 <div class="card-header py-3">
-                                    <h6 class="m-0 font-weight-bold text-primary">Unblock Jobs</h6>
+                                    <h6 class="m-0 font-weight-bold text-primary">Adaptive Sampling Jobs</h6>
                                 </div>
 
                                 <div class="card-body">
@@ -90,44 +90,11 @@
 
                                         <p><b>Add primitive jobs manually</b></p>
 
-                                        <!-- Action -->
+                                        <!-- Job Name -->
                                         <div class="form-row">
-                                            <div class="form-group col-md-6 mb-6">
-                                                <label for="unblockMode">Job Mode</label>
-                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#unblockModeModal"></i>
-
-                                                <!-- Modal -->
-                                                <div class="modal fade" id="unblockModeModal" tabindex="-1" role="dialog" aria-labelledby="unblockModeModalLabel" aria-hidden="true">
-                                                    <div class="modal-dialog" role="document">
-                                                    <div class="modal-content">
-                                                        <div class="modal-header">
-                                                        <h5 class="modal-title" id="unblockModModalLabel">Unblock Mode</h5>
-                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                            <span aria-hidden="true">&times;</span>
-                                                        </button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <b>Unblock</b>: Unblock strands aligned to the target region.<br><br>
-                                                            <b>Enrich</b>: Unblock strands that not aligned to the target region.<br><br>
-                                                            <b>Balance</b>: Balance coverage of target regions. (Not available)<br><br>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                                        </div>
-                                                    </div>
-                                                    </div>
-                                                </div>
-
-                                                <select id="unblockMode" name="unblockMode" class="form-control">
-                                                    <option selected>unblock</option>
-                                                    <option>stop_receiving</option>
-                                                    <option>balance</option>
-                                                </select>
-                                            </div>
-
-                                            <div class="form-group col-md-6 mb-6">
+                                            <div class="form-group col-md-12 mb-12">
                                                 <label for="jobName">Job Name</label>
-                                                <input type="text" class="form-control" id="jobName" name="jobName" placeholder="Job Name" value="Job Name">
+                                                <input type="text" class="form-control" id="jobName" name="jobName" placeholder="Job Name" value="">
                                             </div>
                                         </div>
 
@@ -154,6 +121,7 @@
                                             </div>
                                         </div>
 
+                                        <!-- Barcodes -->
                                         <div class="form-row">
                                             <div class="form-group col-md-12 mb-3">
                                                 <label for="barcode">Barcodes (split by comma)</label>
@@ -183,13 +151,14 @@
                                                     </div>
                                                 </div>
 
-                                                <input type="text" class="form-control" id="barcode" name="barcode" placeholder="barcode01,barcode02" value="barcode01,barcode02">
+                                                <input type="text" class="form-control" id="barcode" name="barcode" placeholder="barcode01,barcode02" value="">
                                             </div>
                                         </div>
 
+                                        <!-- Target regions -->
                                         <div class="form-row">
                                             <div class="form-group col-md-12 mb-3">
-                                                <label for="target">Target region</label>
+                                                <label for="target">Target regions</label>
 
                                                 <i class="fas fa-circle-question" data-toggle="modal" data-target="#tgModal"></i>
 
@@ -204,10 +173,12 @@
                                                         </button>
                                                         </div>
                                                         <div class="modal-body">
-                                                        <b>chr:start-end</b><br>apply action to reads aligned to target region<br><br>
-                                                        <b>chr</b><br>apply action to reads aligned to target chromosome<br><br>
-                                                        <b>"Mapped"</b><br>apply action to reads aligned to reference transcriptome<br><br>
-                                                        <b>"Unmapped"</b><br>apply action to unmapped reads<br><br>
+                                                        <b>chr</b><br>specify a target chromosome<br><br>
+                                                        <b>chr:start-end</b><br>specify a target region<br><br>
+                                                        <b>Gene Name</b><br>specify a target gene<br><br>
+                                                        <b>Ensembl Gene ID</b><br>specify a target gene<br><br>
+                                                        <b>Transcript Name</b><br>specify a target transcript<br><br>
+                                                        <b>Ensembl Transcript ID</b><br>specify a target transcript<br><br>
                                                         </div>
                                                         <div class="modal-footer">
                                                         <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
@@ -216,51 +187,145 @@
                                                     </div>
                                                 </div>
 
-                                                <input type="text" class="form-control" id="target" name="target" placeholder="chr1:1000-2000" value="chr1:1000-2000">
+                                                <textarea class="form-control" aria-label="With textarea" id="target" name="target" required placeholder="chr1
+chr1:1000-2000
+TP53
+TP53-221
+ENSG00000223972.5
+ENST00000450305.2" value="" rows="10"></textarea>
                                             </div>
                                         </div>
 
-                                        <label><b>Or upload your program in JSON format</b></label>
-
-                                        <i class="fas fa-circle-question" data-toggle="modal" data-target="#batchModal"></i>
-
-                                        <!-- Modal -->
-                                        <div class="modal fade" id="batchModal" tabindex="-1" role="dialog" aria-labelledby="batchModalLabel" aria-hidden="true">
-                                            <div class="modal-dialog" role="document">
-                                            <div class="modal-content">
-                                                <div class="modal-header">
-                                                <h5 class="modal-title" id="batchModalLabel">Jobs batch upload (only support JSON format)</h5>
-                                                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                                    <span aria-hidden="true">&times;</span>
-                                                </button>
+                                        <!-- Time and Channel control-->
+                                        <div class="form-row">
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="mappedReads">Mapped</label>
+                                                <!-- modal -->
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#mappedReadsModal"></i>
+                                                <div class="modal fade" id="mappedReadsModal" tabindex="-1" role="dialog" aria-labelledby="mappedReadsModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="mappedReadsModalLabel">Apply action to reads mapped to target regions</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <b>unblock</b>: Reject molecules.<br><br>
+                                                            <b>stop_receiving</b>: Continue sequencing.<br><br>
+                                                            <b>balance</b>: Balancing coverage of all target regions<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
                                                 </div>
-                                                <div class="modal-body">
-                                                    <b>Example:</b><br><br>
-                                                    <pre>
-{
-    "time|0-60": {
-        "ch|0-128": {
-            "bc|all": {
-                "target|chrM": "Enrich",
-                "target|chr21": "Unblock",
-            }
-        },
-        "ch|128-256": {
-            "bc|all": {
-                target|/tmp/config/targets.bed": "Unblock"
-            }
-        }
-    }
-}
-                                                    </pre>
 
-                                                </div>
-                                                <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                                                </div>
+                                                <select id="mappedReads" name="mappedReads" class="form-control">
+                                                    <option>unblock</option>
+                                                    <option selected>stop_receiving</option>
+                                                    <option>balance</option>
+                                                </select>
                                             </div>
+
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="missedReads">Missed reads</label>
+                                                <!-- modal -->
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#missedReadsModal"></i>
+                                                <div class="modal fade" id="missedReadsModal" tabindex="-1" role="dialog" aria-labelledby="missedReadsModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="missedReadsModalLabel">Apply action to reads that mapped outside the target regions</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <b>unblock</b>: Reject molecules.<br><br>
+                                                            <b>stop_receiving</b>: Continue sequencing.<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </div>
+
+                                                <select id="missedReads" name="missedReads" class="form-control">
+                                                    <option selected>unblock</option>
+                                                    <option>stop_receiving</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="unmappedReads">Unmapped reads</label>
+                                                <!-- modal -->
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#unmappedReadsModal"></i>
+                                                <div class="modal fade" id="unmappedReadsModal" tabindex="-1" role="dialog" aria-labelledby="unmappedReadsModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="unmappedReadsModalLabel">Apply action to reads that could not mapped to reference genome</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <b>unblock</b>: Reject molecules.<br><br>
+                                                            <b>stop_receiving</b>: Continue sequencing.<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </div>
+
+                                                <select id="unmappedReads" name="unmappedReads" class="form-control">
+                                                    <option selected>unblock</option>
+                                                    <option>stop_receiving</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="form-group col-md-3 mb-3">
+                                                <label for="multiMapped">Multi-mapped</label>
+                                                <!-- modal -->
+                                                <i class="fas fa-circle-question" data-toggle="modal" data-target="#multiMappedModal"></i>
+                                                <div class="modal fade" id="multiMappedModal" tabindex="-1" role="dialog" aria-labelledby="multiMappedModalLabel" aria-hidden="true">
+                                                    <div class="modal-dialog" role="document">
+                                                    <div class="modal-content">
+                                                        <div class="modal-header">
+                                                        <h5 class="modal-title" id="multiMappedModalLabel">Apply action to reads are not uniquely mapped to reference genome</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                        </div>
+                                                        <div class="modal-body">
+                                                            <b>none</b>: Do not specify handle these molecules.<br><br>
+                                                            <b>unblock</b>: Reject molecules.<br><br>
+                                                            <b>stop_receiving</b>: Continue sequencing.<br><br>
+                                                        </div>
+                                                        <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    </div>
+                                                </div>
+
+                                                <select id="multiMapped" name="multiMapped" class="form-control">
+                                                    <option selected>none</option>
+                                                    <option>unblock</option>
+                                                    <option>stop_receiving</option>
+                                                </select>
                                             </div>
                                         </div>
+
+                                        <p><b>Or</b></p>
+
+                                        <p class="text-start"><b>Upload your program in </b><a href="https://github.com/bioinfo-biols/PROFIT-seq/wiki/02.Usage#step-4-specify-enrichment-target-or-upload-a-toml-formatted-config-on-the-web-interface" target="_blank">TOML format</a></p>
 
                                         <div class="form-row">
                                             <div class="custom-file col-md-12 mb-3">
@@ -347,7 +412,7 @@
             <footer class="sticky-footer bg-white">
                 <div class="container my-auto">
                     <div class="copyright text-center my-auto">
-                        <span>Copyright &copy; DashION 2022</span>
+                        <span>Copyright &copy; PROFIT-seq 2022</span>
                     </div>
                 </div>
             </footer>

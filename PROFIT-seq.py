@@ -19,20 +19,25 @@ Logger = get_logger("PROFIT_seq")
               help='guppy basecalling config.')
 @click.option('--mm_idx', type=str, required=True,
               help='Minimap2 index of reference sequences')
+@click.option('--gtf', type=str, default=None, 
+              help='reference genome annotation')
+@click.option('--debug', is_flag=True, 
+              help='run in debugging mode')
 @click.version_option('0.2b')
-def main(minknow_host, minknow_port, guppy_address, guppy_config, dashboard_port, mm_idx):
+def main(minknow_host, minknow_port, guppy_address, guppy_config, dashboard_port, mm_idx, gtf, debug):
     from app.server import app
     from PROFIT_seq.env import initializer
 
     if Path(sys.argv[0]).name != 'PROFIT_seq':
-        Logger.setLevel(10)
+        level = 10 if debug else 20
+        Logger.setLevel(level)
         for handler in Logger.handlers:
-            handler.setLevel(10)
+            handler.setLevel(level)
 
     # mm_idx = '/home/zhangjy/data/database/GENCODE/hg38.mmi'
-    initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx)
+    initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx, gtf)
 
-    Logger.info("Everything works fine! Starting PROFIT-seq dashboard")
+    Logger.info("Starting PROFIT-seq dashboard")
     app.run(debug=False, host="0.0.0.0", port=dashboard_port)
 
 
