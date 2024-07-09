@@ -274,7 +274,6 @@ def correct_expression_level(fl_sf, recovered_sf, target_transcripts, tscp_to_ge
     return 0
 
 
-
 @click.command()
 @click.option('--workspace', '-i', type=Path, required=True,
               help="directory of step2_consensus.py output")

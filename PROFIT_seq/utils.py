@@ -1,13 +1,11 @@
 """Tools of FullSpeed
 
-This module contain tools functions of FullSpeed, most of which are
-heavily inspired by Readfish(https://github.com/LooseLab/readfish) and
+This module contain tools functions of PROFIT-seq, the core functions are
+inspired by Readfish(https://github.com/LooseLab/readfish) and
 read_until_api (https://github.com/nanoporetech/read_until_api)
-google.py
 
 Todo:
     * Add transcript coverage determine for RNA-seq
-
 """
 import os
 import sys
@@ -26,6 +24,8 @@ from minknow_api import Connection
 from pyguppy_client_lib.pyclient import PyGuppyClient
 from pyguppy_client_lib.helper_functions import package_read
 Logger = getLogger('PROFIT_seq')
+
+from PROFIT_seq.parser import yield_gff
 
 
 class Severity(IntEnum):
@@ -175,45 +175,69 @@ def load_toml(infile):
 
 
 def load_prim_job(form):
+    from PROFIT_seq import env
+
     """Load form request from web UI"""
-    action = form['unblockMode']
+    job_name = form['jobName']
     start_time = int(form['startTime'])
     end_time = start_time + int(form['duration'])
     start_channel = int(form['startChannel'])
     end_channel = int(form['endChannel'])
+
+    # Barcodes
     _barcode = form['barcode']
     if _barcode in ['classified', 'unclassified', 'all']:
         barcodes = _barcode
     else:
         barcodes = _barcode.split(',')
 
+    # Target regions
     region_idx = defaultdict(list)
-    _target = form['target']
-    if _target in ['multi', 'mapped', 'unmapped', 'all']:
-        region_idx[_target] = action
-    else:
-        chrom, pos = _target.split(':')
-        st, en = int(pos.split('-')[0]), int(pos.split('-')[1])
-        region_idx[chrom].append((st, en, action))
-    if action == "stop_receiving":
-        region_idx["missed"] = "unblock"
-        region_idx["unmapped"] = "unblock"
-    elif action == "unblock":
-        region_idx["missed"] = "stop_receiving"
-        region_idx["unmapped"] = "stop_receiving"
-    elif action == "":
-        region_idx["missed"] = "stop_receiving"
-        region_idx["unmapped"] = "stop_receiving"
+    for _target in form['target'].split('\n'):
+        _target = _target.rstrip()
+        if ":" not in _target:
+            # Chr
+            region_idx[_target] = form['mappedReads']
+        else:
+            if _target in env.Annotation:
+                # Gene and transcript ID / Name
+                chrom, st, en = env.Annotation[_target]
+            else:
+                # chr:start-end
+                chrom, pos = _target.split(':')
+                st, en = int(pos.split('-')[0]), int(pos.split('-')[1])
+            if chrom in region_idx and isinstance(region_idx[chrom], str):
+                continue
+            region_idx[chrom].append((st, en, form['mappedReads']))
 
+    region_idx["missed"] = form["missedReads"]
+    region_idx["unmapped"] = form["unmappedReads"]
+    region_idx["multi"] = form["multiMapped"]
+
+    # Summarize job
     job = {
-        'name': "Manual Job",
+        'name': job_name,
         'time': (start_time, end_time),
         'ch': (start_channel, end_channel),
         'bc': barcodes,
         'index': region_idx,
-        'group': action,
+        'group': form['mappedReads'],
     }
     return job
+
+
+def load_gtf(gtf_file):
+    gtf_idx = {}
+    for parser in yield_gff(gtf_file):
+        if parser.type == 'gene':
+            gtf_idx[parser.gene_id] = [parser.contig, parser.start, parser.end]
+            gtf_idx[parser.gene_name] = [parser.contig, parser.start, parser.end]
+        elif parser.type == 'transcript':
+            gtf_idx[parser.transcript_id] = [parser.contig, parser.start, parser.end]
+            gtf_idx[parser.transcript_name] = [parser.contig, parser.start, parser.end]
+        else:
+            continue
+    return gtf_idx
 
 
 def hash_filename(fname):

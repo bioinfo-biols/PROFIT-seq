@@ -1,6 +1,7 @@
 import sys
 import time
 import mappy as mp
+from traceback import format_exc
 from pathlib import Path
 from logging import getLogger
 from threading import Thread
@@ -8,13 +9,15 @@ from collections import defaultdict
 from read_until import ReadUntilClient
 from pyguppy_client_lib.pyclient import PyGuppyClient
 
-from PROFIT_seq.utils import Severity, send_message 
+from PROFIT_seq.utils import Severity, send_message, load_gtf
 Logger = getLogger("PROFIT_seq")
 
 # Initialized server
 Client = None
 Caller = None
 Aligner = None
+Debugging = False
+Annotation = {}
 RedFlag = False
 Sequence = {}
 Jobs = []
@@ -30,13 +33,13 @@ Target_blacklist = {}
 Unblock_header = ['read_id', 'channel', 'read_number', 'seq_length', 'action', 'reason', 'alignment', 'sequence']
 Log_header = ['time', 'total', 'get_read', 'basecalling', 'alignment', 'judge', 'action', 'update']
 
-def initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx):
+def initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx, gtf_file):
     """Initialize servers"""
-    global Caller, Client, Aligner, ProtocolRun, Sequence
-    Logger.info('Initializing FullSpeed runner ...')
+    global Caller, Client, Aligner, Annotation, ProtocolRun, Sequence, Debugging
+    Logger.debug('Initializing PROFIT-seq runner ...')
 
     # Step1. Connect to MinKNOW server
-    Logger.info(f"MinKNOW server: {minknow_host}:{minknow_port}")
+    Logger.debug(f"MinKNOW server: {minknow_host}:{minknow_port}")
     try:
         read_until_client = ReadUntilClient(
             mk_host=minknow_host, mk_port=minknow_port, one_chunk=False,
@@ -45,10 +48,11 @@ def initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx)
             # calibrated_signal=False
         )
         batch_size = read_until_client.channel_count
-        Logger.info(f"Using batch size of {batch_size}")
+        Logger.debug(f"Using batch size of {batch_size}")
     except Exception as e:
         Logger.error("Failed to connect to MinKNOW server. Please make sure the MinION device and sequencing Flow Cell is properly installed!")
-        Logger.error(str(e))
+        Logger.error(format_exc())
+        Logger.error(sys.exc_info()[2])
         sys.exit(1)
 
     # assert read_until_client.connection.acquisition.current_status().status == MinknowStatus.READY
@@ -62,7 +66,7 @@ def initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx)
     Logger.info("Connected to MinKNOW server")
 
     # Step2. Connect to ont-guppy basecaller
-    Logger.info(f"Guppy server: {guppy_address}, using config: {guppy_config}")
+    Logger.debug(f"Guppy server: {guppy_address}, using config: {guppy_config}")
     caller = PyGuppyClient(
         address=guppy_address,
         config=guppy_config,
@@ -74,11 +78,16 @@ def initializer(minknow_host, minknow_port, guppy_address, guppy_config, mm_idx)
     Logger.info("Connected to Guppy server")
 
     # Step3. Connect to minimap2 aligner
-    Logger.info(f"Loading reference index {mm_idx}")
+    Logger.debug(f"Loading reference index {mm_idx}")
     # aligner = None
     aligner = mp.Aligner(mm_idx)
     Aligner = aligner
     Logger.info("Loaded reference index")
+
+    if gtf_file is not None:
+        annotation = load_gtf(gtf_file)
+        Annotation = annotation
+        Logger.info("Loaded annotation gtf")
 
     Worker['status'] = 'Ready'
     Worker['message'] = 'Ready for sequencing'
