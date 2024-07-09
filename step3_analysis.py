@@ -6,9 +6,10 @@ import click
 import pandas as pd
 from collections import defaultdict
 from pathlib import Path
+from edlib import align
 from PROFIT_seq.logger import get_logger
 from PROFIT_seq.parser import yield_gff
-from PROFIT_seq.seqIO import yield_fastx
+from PROFIT_seq.seqIO import yield_fastx, revcomp
 from PROFIT_seq.utils import load_toml, check_dir
 LOGGER = get_logger("PROFIT-seq", debugging=False)
 
@@ -31,6 +32,80 @@ def load_step2_summary(summary_file):
     summary = pd.read_csv(summary_file, index_col=0, sep="\t")
     blacklist = summary.index[summary['Blacklist'] is False]
     return blacklist
+
+
+def dedup_reads(input_fa, out_dir, prefix, log_file, threads):
+    out_paf = f"{out_dir}/{prefix}.all_vs_all.paf"
+    out_fa = f"{out_dir}/{prefix}.dedup.fa"
+    LOGGER.info(f"Perform minimap2 alignment")
+    mm2_cmd = f"minimap2 -t {threads} -x ava-ont {input_fa} {input_fa} > {out_paf}"
+    run_cmd(mm2_cmd, log_file)
+
+    # Get reads cluster
+    LOGGER.info(f"Loading all vs all paf")
+    reads_cluster = defaultdict(dict)
+    error_rate = 0.25
+    with open(out_paf, "r") as f:
+        for line in f:
+            content = line.rstrip().split('\t')
+            q_name, q_len, q_st, q_en, strand, t_name, t_len, t_st, t_en = content[:9]
+            if (int(q_en) - int(q_st)) / int(q_len) < 0.8:
+                continue
+            if (int(t_en) - int(t_st)) / int(t_len) < 0.8:
+                continue
+            umi1 = q_name.split("|")[1]
+            umi2 = t_name.split("|")[1]
+            base1 = len(umi1) - sum([i == ';' for i in umi1])
+            base2 = len(umi2) - sum([i == ';' for i in umi2])
+            mm = min(base1, base2) * error_rate
+
+            if strand == "+" and align(umi1, umi2)['editDistance'] > mm:
+                continue
+            if strand == "-" and align(umi1, revcomp(umi2))['editDistance'] > mm:
+                continue
+            reads_cluster[q_name][t_name] = 1
+
+    # Get duplicate reads
+    LOGGER.info(f"Extracting RCA duplicates")
+    umi_to_read, read_to_umi = defaultdict(list), {}
+    for umi_idx, q_name in enumerate(reads_cluster):
+        umi_reads = [q_name, ] + list(reads_cluster[q_name])
+
+        assigned = []
+        for read_id in umi_reads:
+            if read_id in read_to_umi:
+                assigned.append(read_to_umi[read_id])
+
+        if len(assigned) == 0:
+            for read_id in umi_reads:
+                read_to_umi[read_id] = umi_idx
+            umi_to_read[umi_idx] = umi_reads
+
+        else:
+            for read_id in umi_reads:
+                read_to_umi[read_id] = assigned[0]
+            umi_to_read[assigned[0]] += umi_reads
+
+            if len(assigned) > 1:
+                for _idx in assigned[1:]:
+                    for read_id in umi_to_read[_idx]:
+                        read_to_umi[read_id] = assigned[0]
+                    umi_to_read[assigned[0]] += umi_to_read[_idx]
+
+    _clusters = set([x for _, x in read_to_umi.items()])
+    dup_reads = set(sum([umi_to_read[_cluster][1:] for _cluster in _clusters], []))
+    LOGGER.info(f"RCA duplicate reads: {len(dup_reads)}")
+
+    # Filter fastq
+    with open(input_fa, 'r') as f, open(out_fa, 'w') as out:
+        for line in f:
+            seq = f.readline()
+            read_id = line.rstrip().split(' ')[0].lstrip(">")
+            if read_id in dup_reads:
+                continue
+            out.write(line + seq)
+
+    return out_fa
 
 
 def extract_hifl_fasta(ccs_fa, blacklist, out_fa):
@@ -199,6 +274,7 @@ def correct_expression_level(fl_sf, recovered_sf, target_transcripts, tscp_to_ge
     return 0
 
 
+
 @click.command()
 @click.option('--workspace', '-i', type=Path, required=True,
               help="directory of step2_consensus.py output")
@@ -235,8 +311,9 @@ def main(workspace, prefix, genome, gtf, bed, threads, assemble):
 
     # Extract high-confidence reads
     ccs_fa = workspace / f"{prefix}.fl.fa"
+    dedup_fa = dedup_reads(ccs_fa, tmp_dir, prefix, log_file, threads)
     hifl_fa = tmp_dir / f"{prefix}.hifl.fa"
-    extract_hifl_fasta(ccs_fa, blacklist, hifl_fa)
+    extract_hifl_fasta(dedup_fa, blacklist, hifl_fa)
 
     # Run stringtie sequence assembly
     if assemble:

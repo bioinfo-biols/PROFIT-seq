@@ -12,3 +12,5 @@ pyccs==1.1.0
 pyspoa==0.0.8
 read-until==3.0.0
 toml==0.10.2
+pyabpoa==1.5.1
+parasail==1.3.4
